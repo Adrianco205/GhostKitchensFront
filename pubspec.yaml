@@ -27,6 +27,8 @@ dependencies:
   # === JSON serialization (lo puedes usar más adelante) ===
   json_annotation: ^4.9.0
 
+  shared_preferences: ^2.2.3
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

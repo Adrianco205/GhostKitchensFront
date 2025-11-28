@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:ghost_kitchens_app/core/network/api_client.dart';
+import 'package:ghost_kitchens_app/core/network/api_endpoints.dart';
+import 'package:ghost_kitchens_app/search/data/models/search_dto.dart';
 
 class SearchResultsPage extends StatefulWidget {
   final String initialQuery;
@@ -20,87 +23,11 @@ class _SearchResultsPageState extends State<SearchResultsPage> {
   String _selectedSection = 'Todas las secciones';
   String _selectedOrder = 'Relevancia';
 
-  // Mocks de cocinas + productos (para la vista tipo Rappi)
-  final List<_KitchenResult> _kitchens = const [
-    _KitchenResult(
-      name: 'Carlos Burger Cartagena',
-      distanceKm: 3.1,
-      deliveryTimeMin: 40,
-      minPrice: 7000,
-      rating: 4.7,
-      discount: 'Hasta 30% Off',
-      imageUrl:
-          'https://images.pexels.com/photos/1639557/pexels-photo-1639557.jpeg',
-      dishes: [
-        _DishMock(
-          name: 'Burger Clásica',
-          price: 35000,
-          imageUrl:
-              'https://images.pexels.com/photos/1639562/pexels-photo-1639562.jpeg',
-        ),
-        _DishMock(
-          name: 'Burger Doble Queso',
-          price: 42000,
-          imageUrl:
-              'https://images.pexels.com/photos/1639563/pexels-photo-1639563.jpeg',
-        ),
-        _DishMock(
-          name: 'Papas con tocineta',
-          price: 18000,
-          imageUrl:
-              'https://images.pexels.com/photos/1583884/pexels-photo-1583884.jpeg',
-        ),
-      ],
-    ),
-    _KitchenResult(
-      name: 'La Santa Pizza',
-      distanceKm: 3.9,
-      deliveryTimeMin: 39,
-      minPrice: 7000,
-      rating: 4.5,
-      discount: '15% Off',
-      imageUrl:
-          'https://images.pexels.com/photos/2619967/pexels-photo-2619967.jpeg',
-      dishes: [
-        _DishMock(
-          name: 'Pizza 35 cm Pollo Champiñón',
-          price: 35000,
-          imageUrl:
-              'https://images.pexels.com/photos/4109083/pexels-photo-4109083.jpeg',
-        ),
-        _DishMock(
-          name: 'Pizza 4 quesos',
-          price: 38000,
-          imageUrl:
-              'https://images.pexels.com/photos/315755/pexels-photo-315755.jpeg',
-        ),
-      ],
-    ),
-    _KitchenResult(
-      name: 'Vir Viri Broaster',
-      distanceKm: 11.0,
-      deliveryTimeMin: 40,
-      minPrice: 13500,
-      rating: 3.6,
-      discount: 'Hasta 25% Off',
-      imageUrl:
-          'https://images.pexels.com/photos/60616/fried-chicken-chicken-fried-crunchy-60616.jpeg',
-      dishes: [
-        _DishMock(
-          name: 'Bucket familiar',
-          price: 52000,
-          imageUrl:
-              'https://images.pexels.com/photos/4109132/pexels-photo-4109132.jpeg',
-        ),
-        _DishMock(
-          name: 'Alitas BBQ',
-          price: 28000,
-          imageUrl:
-              'https://images.pexels.com/photos/2773940/pexels-photo-2773940.jpeg',
-        ),
-      ],
-    ),
-  ];
+  bool _isLoading = false;
+  String? _errorMessage;
+
+  /// Resultados provenientes del backend
+  List<SearchResultItemDto> _results = [];
 
   @override
   void initState() {
@@ -108,6 +35,8 @@ class _SearchResultsPageState extends State<SearchResultsPage> {
     _controller = TextEditingController(text: widget.initialQuery);
     _focusNode = FocusNode();
     _query = widget.initialQuery;
+
+    _fetchResults(_query);
   }
 
   @override
@@ -117,39 +46,66 @@ class _SearchResultsPageState extends State<SearchResultsPage> {
     super.dispose();
   }
 
+  // ==================== API ====================
+
+  Future<void> _fetchResults(String q) async {
+    final trimmed = q.trim();
+    if (trimmed.isEmpty) return;
+
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final client = ApiClient();
+      final response = await client.get(
+        ApiEndpoints.search,
+        queryParameters: {'q': trimmed},
+      );
+
+      final dto = SearchResponseDto.fromJson(
+        response.data as Map<String, dynamic>,
+      );
+
+      setState(() {
+        _query = dto.query;
+        _results = dto.results;
+      });
+    } catch (e) {
+      setState(() {
+        _errorMessage = 'No se pudieron cargar los resultados.';
+      });
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  // ==================== HANDLERS ====================
+
   void _onChanged(String value) {
     setState(() => _query = value);
   }
 
   void _onSubmitted(String value) {
-    setState(() => _query = value.trim());
-    // opcional: hacer scroll arriba, etc.
+    _fetchResults(value);
   }
 
   void _clearQuery() {
     setState(() {
       _controller.clear();
       _query = '';
+      _results = [];
+      _errorMessage = null;
     });
     _focusNode.requestFocus();
-  }
-
-  List<_KitchenResult> _filterKitchens() {
-    final q = _query.toLowerCase().trim();
-    if (q.isEmpty) return _kitchens;
-
-    return _kitchens.where((k) {
-      final inName = k.name.toLowerCase().contains(q);
-      final inDish =
-          k.dishes.any((d) => d.name.toLowerCase().contains(q));
-      return inName || inDish;
-    }).toList();
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final filtered = _filterKitchens();
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
@@ -210,8 +166,9 @@ class _SearchResultsPageState extends State<SearchResultsPage> {
                     child: GestureDetector(
                       onTap: () {
                         // luego: bottom sheet real
-                        setState(() =>
-                            _selectedSection = 'Todas las secciones');
+                        setState(
+                          () => _selectedSection = 'Todas las secciones',
+                        );
                       },
                       child: Row(
                         children: [
@@ -242,7 +199,7 @@ class _SearchResultsPageState extends State<SearchResultsPage> {
                   Expanded(
                     child: GestureDetector(
                       onTap: () {
-                        // luego: bottom sheet real
+                        // luego: bottom sheet real (por ahora solo texto)
                         setState(() => _selectedOrder = 'Relevancia');
                       },
                       child: Row(
@@ -277,15 +234,48 @@ class _SearchResultsPageState extends State<SearchResultsPage> {
 
             const SizedBox(height: 12),
 
-            // LISTA SCROLLABLE DE RESULTADOS (responsiva)
+            // LISTA SCROLLABLE DE RESULTADOS
             Expanded(
-              child: ListView.separated(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-                itemCount: filtered.length,
-                separatorBuilder: (_, __) => const SizedBox(height: 16),
-                itemBuilder: (context, index) {
-                  final kitchen = filtered[index];
-                  return _KitchenResultCard(kitchen: kitchen);
+              child: Builder(
+                builder: (_) {
+                  if (_isLoading) {
+                    return const Center(
+                      child: CircularProgressIndicator(),
+                    );
+                  }
+
+                  if (_errorMessage != null) {
+                    return Center(
+                      child: Text(
+                        _errorMessage!,
+                        style: theme.textTheme.bodyMedium,
+                      ),
+                    );
+                  }
+
+                  if (_results.isEmpty) {
+                    return Center(
+                      child: Text(
+                        _query.isEmpty
+                            ? 'Empieza a buscar para ver resultados.'
+                            : 'No encontramos resultados para "$_query".',
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: Colors.grey,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    );
+                  }
+
+                  return ListView.separated(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                    itemCount: _results.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 16),
+                    itemBuilder: (context, index) {
+                      final kitchen = _results[index];
+                      return _KitchenResultCard(kitchen: kitchen);
+                    },
+                  );
                 },
               ),
             ),
@@ -299,13 +289,19 @@ class _SearchResultsPageState extends State<SearchResultsPage> {
 // =================== CARDS RESULTADOS ===================
 
 class _KitchenResultCard extends StatelessWidget {
-  final _KitchenResult kitchen;
+  final SearchResultItemDto kitchen;
 
   const _KitchenResultCard({required this.kitchen});
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+
+    final imageUrl = kitchen.imageUrl ?? '';
+    final rating = kitchen.rating ?? 0.0;
+    final distance = kitchen.distanceKm ?? 0.0;
+    final time = kitchen.deliveryTimeMin ?? 0;
+    final minPrice = kitchen.minPrice ?? 0;
 
     return Container(
       decoration: BoxDecoration(
@@ -326,14 +322,19 @@ class _KitchenResultCard extends StatelessWidget {
           // Imagen principal del restaurante
           AspectRatio(
             aspectRatio: 16 / 9,
-            child: Image.network(
-              kitchen.imageUrl,
-              fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => Container(
-                color: Colors.grey.shade300,
-                child: const Icon(Icons.fastfood, size: 40),
-              ),
-            ),
+            child: imageUrl.isNotEmpty
+                ? Image.network(
+                    imageUrl,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => Container(
+                      color: Colors.grey.shade300,
+                      child: const Icon(Icons.fastfood, size: 40),
+                    ),
+                  )
+                : Container(
+                    color: Colors.grey.shade300,
+                    child: const Icon(Icons.fastfood, size: 40),
+                  ),
           ),
 
           Padding(
@@ -343,7 +344,7 @@ class _KitchenResultCard extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    if (kitchen.discount.isNotEmpty)
+                    if ((kitchen.discount ?? '').isNotEmpty)
                       Container(
                         padding: const EdgeInsets.symmetric(
                             horizontal: 8, vertical: 2),
@@ -352,7 +353,7 @@ class _KitchenResultCard extends StatelessWidget {
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Text(
-                          kitchen.discount,
+                          kitchen.discount!,
                           style: theme.textTheme.labelSmall?.copyWith(
                             fontWeight: FontWeight.w700,
                           ),
@@ -394,17 +395,17 @@ class _KitchenResultCard extends StatelessWidget {
                 Row(
                   children: [
                     Text(
-                      '${kitchen.deliveryTimeMin} min',
+                      '$time min',
                       style: theme.textTheme.bodySmall,
                     ),
                     const SizedBox(width: 6),
                     Text(
-                      '• \$${kitchen.minPrice}',
+                      '• \$${minPrice}',
                       style: theme.textTheme.bodySmall,
                     ),
                     const SizedBox(width: 6),
                     Text(
-                      '• ${kitchen.distanceKm.toStringAsFixed(1)} km',
+                      '• ${distance.toStringAsFixed(1)} km',
                       style: theme.textTheme.bodySmall,
                     ),
                     const SizedBox(width: 6),
@@ -412,7 +413,7 @@ class _KitchenResultCard extends StatelessWidget {
                         size: 14, color: Colors.yellow.shade600),
                     const SizedBox(width: 2),
                     Text(
-                      kitchen.rating.toStringAsFixed(1),
+                      rating.toStringAsFixed(1),
                       style: theme.textTheme.bodySmall,
                     ),
                   ],
@@ -425,7 +426,7 @@ class _KitchenResultCard extends StatelessWidget {
           if (kitchen.dishes.isNotEmpty) ...[
             const SizedBox(height: 4),
             SizedBox(
-              height: 190, // AUMENTADO para que quepa todo el contenido
+              height: 190,
               child: ListView.separated(
                 padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
                 scrollDirection: Axis.horizontal,
@@ -445,7 +446,7 @@ class _KitchenResultCard extends StatelessWidget {
 }
 
 class _DishCard extends StatelessWidget {
-  final _DishMock dish;
+  final DishPreviewDto dish;
 
   const _DishCard({required this.dish});
 
@@ -453,8 +454,10 @@ class _DishCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
+    final imageUrl = dish.imageUrl ?? '';
+
     return Container(
-      width: 140, // ancho fijo, altura se adapta
+      width: 140,
       decoration: BoxDecoration(
         color: const Color(0xFF181820),
         borderRadius: BorderRadius.circular(14),
@@ -467,15 +470,20 @@ class _DishCard extends StatelessWidget {
           // Imagen del plato con proporción estable
           AspectRatio(
             aspectRatio: 4 / 3,
-            child: Image.network(
-              dish.imageUrl,
-              fit: BoxFit.cover,
-              width: double.infinity,
-              errorBuilder: (_, __, ___) => Container(
-                color: Colors.grey.shade300,
-                child: const Icon(Icons.fastfood, size: 32),
-              ),
-            ),
+            child: imageUrl.isNotEmpty
+                ? Image.network(
+                    imageUrl,
+                    fit: BoxFit.cover,
+                    width: double.infinity,
+                    errorBuilder: (_, __, ___) => Container(
+                      color: Colors.grey.shade300,
+                      child: const Icon(Icons.fastfood, size: 32),
+                    ),
+                  )
+                : Container(
+                    color: Colors.grey.shade300,
+                    child: const Icon(Icons.fastfood, size: 32),
+                  ),
           ),
 
           // Texto + precio
@@ -506,40 +514,4 @@ class _DishCard extends StatelessWidget {
       ),
     );
   }
-}
-
-// =================== MODELOS MOCK ===================
-
-class _KitchenResult {
-  final String name;
-  final double distanceKm;
-  final int deliveryTimeMin;
-  final int minPrice;
-  final double rating;
-  final String discount;
-  final String imageUrl;
-  final List<_DishMock> dishes;
-
-  const _KitchenResult({
-    required this.name,
-    required this.distanceKm,
-    required this.deliveryTimeMin,
-    required this.minPrice,
-    required this.rating,
-    required this.discount,
-    required this.imageUrl,
-    required this.dishes,
-  });
-}
-
-class _DishMock {
-  final String name;
-  final int price;
-  final String imageUrl;
-
-  const _DishMock({
-    required this.name,
-    required this.price,
-    required this.imageUrl,
-  });
 }

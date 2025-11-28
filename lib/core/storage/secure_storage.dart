@@ -43,7 +43,9 @@ class SecureStorage implements ISecureStorage {
     await write(key: _refreshTokenKey, value: refresh);
   }
 
+  /// Getter de instancia
   Future<String?> get accessToken async => read(key: _accessTokenKey);
+
   Future<String?> get refreshToken async => read(key: _refreshTokenKey);
 
   Future<void> clearTokens() async {
