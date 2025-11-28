@@ -1,13 +1,25 @@
 import 'package:flutter/material.dart';
 import 'theme/app_theme.dart';
+
+import 'core/network/api_client.dart';
+import 'core/storage/secure_storage.dart';
+import 'features/auth/data/datasource/auth_remote_datasource.dart';
+import 'features/auth/data/repositories/auth_repository_impl.dart';
 import 'features/auth/presentation/pages/splash_page.dart';
 
 void main() {
-  runApp(const GhostKitchensApp());
+  final apiClient = ApiClient();
+  final authRemote = AuthRemoteDataSource(apiClient);
+  final storage = SecureStorage();
+  final authRepository = AuthRepositoryImpl(authRemote, storage);
+
+  runApp(GhostKitchensApp(authRepository));
 }
 
 class GhostKitchensApp extends StatelessWidget {
-  const GhostKitchensApp({super.key});
+  final AuthRepositoryImpl authRepository;
+
+  const GhostKitchensApp(this.authRepository, {super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -15,7 +27,7 @@ class GhostKitchensApp extends StatelessWidget {
       title: 'Ghost Kitchens',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.dark,
-      home: const SplashPage(),
+      home: SplashPage(authRepository: authRepository),
     );
   }
 }

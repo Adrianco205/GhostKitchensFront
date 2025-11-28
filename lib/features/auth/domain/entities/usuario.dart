@@ -1,24 +1,35 @@
-// lib/features/auth/domain/entities/usuario.dart
-class Usuario {
+import 'package:equatable/equatable.dart';
+
+class Usuario extends Equatable {
   final int id;
   final String nombre;
-  final String apellido;
+  final String? apellido;
   final String email;
-  final String celular;
-  final String numeroIdentificacion;
-  final List<String> roles;
+  final String? celular;
+  final String rol;        // "CLIENTE", "DUENO", etc.
   final bool activo;
-  final DateTime? fechaRegistro;
+  final DateTime fechaRegistro;
 
   const Usuario({
     required this.id,
     required this.nombre,
-    required this.apellido,
+    this.apellido,
     required this.email,
-    required this.celular,
-    required this.numeroIdentificacion,
-    required this.roles,
+    this.celular,
+    required this.rol,
     required this.activo,
-    this.fechaRegistro,
+    required this.fechaRegistro,
   });
+
+  @override
+  List<Object?> get props => [
+        id,
+        nombre,
+        apellido,
+        email,
+        celular,
+        rol,
+        activo,
+        fechaRegistro,
+      ];
 }

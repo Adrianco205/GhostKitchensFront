@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:ghost_kitchens_app/features/auth/data/repositories/auth_repository_impl.dart';
 import 'login_page.dart';
 
 class SplashPage extends StatefulWidget {
-  const SplashPage({super.key});
+  final AuthRepositoryImpl authRepository;
+
+  const SplashPage({super.key, required this.authRepository});
 
   @override
   State<SplashPage> createState() => _SplashPageState();
@@ -17,7 +20,9 @@ class _SplashPageState extends State<SplashPage> {
     Future.delayed(const Duration(seconds: 2), () {
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(
-          builder: (_) => const LoginPage(),
+          builder: (_) => LoginPage(
+            authRepository: widget.authRepository, // 👈 pasamos el repo al Login
+          ),
         ),
       );
     });
@@ -32,7 +37,6 @@ class _SplashPageState extends State<SplashPage> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // Aquí más adelante va el logo de Ghost Kitchens
             Icon(
               Icons.restaurant_menu,
               size: 80,

@@ -1,4 +1,3 @@
-// lib/features/auth/domain/repositories/auth_repository.dart
 import 'package:ghost_kitchens_app/features/auth/domain/entities/auth_session.dart';
 import 'package:ghost_kitchens_app/features/auth/domain/entities/usuario.dart';
 
@@ -9,21 +8,22 @@ abstract class AuthRepository {
     String? otp,
   });
 
-  Future<AuthSession> refreshToken();
-
-  Future<void> logout();
-
-  Future<Usuario> getCurrentUser();
-
   Future<void> registerUser({
     required String nombre,
     required String apellido,
     required String email,
     required String celular,
     required String password,
-    required String numeroIdentificacion,
+    required bool aceptaTerminos,
   });
 
+  Future<Usuario> getCurrentUser();
+
+  Future<AuthSession> refreshToken();
+
+  Future<void> logout();
+
+  // Flujos de OTP / password (placeholder por ahora)
   Future<void> requestOtp({
     required String email,
     required String purpose,

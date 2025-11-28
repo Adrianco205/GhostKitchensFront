@@ -1,8 +1,8 @@
-// lib/features/auth/data/models/auth_token_response_dto.dart
+import 'package:equatable/equatable.dart';
 import 'package:ghost_kitchens_app/features/auth/domain/entities/auth_session.dart';
-import 'package:ghost_kitchens_app/features/auth/data/models/usuario_dto.dart';
+import 'usuario_dto.dart';
 
-class AuthTokenResponseDto {
+class AuthTokenResponseDto extends Equatable {
   final String access;
   final String refresh;
   final UsuarioDto usuario;
@@ -21,6 +21,15 @@ class AuthTokenResponseDto {
     );
   }
 
+  Map<String, dynamic> toJson() {
+    return {
+      'access': access,
+      'refresh': refresh,
+      'usuario': usuario.toJson(),
+    };
+  }
+
+  /// Mapper a sesión de dominio
   AuthSession toEntity() {
     return AuthSession(
       accessToken: access,
@@ -28,4 +37,7 @@ class AuthTokenResponseDto {
       usuario: usuario.toEntity(),
     );
   }
+
+  @override
+  List<Object?> get props => [access, refresh, usuario];
 }

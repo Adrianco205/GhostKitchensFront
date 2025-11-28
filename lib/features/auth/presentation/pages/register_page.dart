@@ -1,10 +1,19 @@
+// lib/features/auth/presentation/pages/register_page.dart
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
+import 'package:dio/dio.dart';
+
+import 'package:ghost_kitchens_app/features/auth/domain/repositories/auth_repository.dart';
 import 'package:ghost_kitchens_app/legal/terms_policies.dart';
 
-
 class RegisterPage extends StatefulWidget {
-  const RegisterPage({super.key});
+  final AuthRepository authRepository;
+
+  const RegisterPage({
+    super.key,
+    required this.authRepository,
+  });
 
   @override
   State<RegisterPage> createState() => _RegisterPageState();
@@ -92,31 +101,52 @@ class _RegisterPageState extends State<RegisterPage> {
 
     setState(() => _isLoading = true);
 
-    // Aquí luego conectamos con /auth/register/
-    // Ejemplo de payload alineado con UsuarioRegister del Swagger:
-    /*
-    final payload = {
-      'nombre': _nombreController.text.trim(),
-      'apellido': _apellidoController.text.trim(),
-      'email': _emailController.text.trim(),
-      'celular': _celularController.text.trim(),
-      'password': _passwordController.text,
-      'numero_identificacion': 'PENDIENTE', // lo ajustarás cuando agregues el campo
-      'acepta_terminos': _aceptaPolitica,
-      'roles_iniciales': ['cliente'],
-    };
-    */
-
-    await Future.delayed(const Duration(seconds: 1));
-
-    setState(() => _isLoading = false);
-
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Registro simulado. Falta OTP 😊')),
+    try {
+      await widget.authRepository.registerUser(
+        nombre: _nombreController.text.trim(),
+        apellido: _apellidoController.text.trim(),
+        email: _emailController.text.trim(),
+        celular: _celularController.text.trim(),
+        password: _passwordController.text,
+        // 👇 ESTE ES EL QUE FALTABA
+        aceptaTerminos: _aceptaPolitica,
       );
 
-      Navigator.of(context).pop(); // Volver al login
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Cuenta creada correctamente. Ahora inicia sesión.'),
+        ),
+      );
+
+      Navigator.of(context).pop(); // vuelve a LoginPage
+    } on DioException catch (e) {
+      debugPrint(
+        'Error registro (status: ${e.response?.statusCode}) body: ${e.response?.data}',
+      );
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'No se pudo completar el registro. Revisa tus datos e inténtalo de nuevo.',
+          ),
+        ),
+      );
+    } catch (e) {
+      debugPrint('Error inesperado en registro: $e');
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Ocurrió un error inesperado. Intenta nuevamente.'),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
@@ -242,8 +272,6 @@ class _RegisterPageState extends State<RegisterPage> {
                     },
                   ),
                   const SizedBox(height: 16),
-
-                  // Checkbox + texto clicable
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -261,8 +289,7 @@ class _RegisterPageState extends State<RegisterPage> {
                             ),
                             children: [
                               const TextSpan(
-                                text:
-                                    'Al continuar aceptas nuestros ',
+                                text: 'Al continuar aceptas nuestros ',
                               ),
                               TextSpan(
                                 text: 'Términos',
@@ -274,8 +301,7 @@ class _RegisterPageState extends State<RegisterPage> {
                               ),
                               const TextSpan(text: ' y la '),
                               TextSpan(
-                                text:
-                                    'Política de Tratamiento de Datos',
+                                text: 'Política de Tratamiento de Datos',
                                 style: const TextStyle(
                                   decoration: TextDecoration.underline,
                                 ),
@@ -289,7 +315,6 @@ class _RegisterPageState extends State<RegisterPage> {
                       ),
                     ],
                   ),
-
                   const SizedBox(height: 24),
                   SizedBox(
                     width: double.infinity,

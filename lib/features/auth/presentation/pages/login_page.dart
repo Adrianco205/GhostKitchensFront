@@ -1,11 +1,21 @@
+// lib/features/auth/presentation/pages/login_page.dart
+import 'package:dio/dio.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
+
 import 'register_page.dart';
-import 'package:ghost_kitchens_app/legal/terms_policies.dart';
+import 'package:ghost_kitchens_app/features/auth/domain/repositories/auth_repository.dart';
 import 'package:ghost_kitchens_app/features/shell/presentation/pages/main_shell_page.dart';
+import 'package:ghost_kitchens_app/legal/terms_policies.dart';
 
 class LoginPage extends StatefulWidget {
-  const LoginPage({super.key});
+  final AuthRepository authRepository;
+
+  const LoginPage({
+    super.key,
+    required this.authRepository,
+  });
 
   @override
   State<LoginPage> createState() => _LoginPageState();
@@ -30,30 +40,89 @@ class _LoginPageState extends State<LoginPage> {
     super.dispose();
   }
 
-Future<void> _onLoginPressed() async {
-  if (!_formKey.currentState!.validate()) return;
+  Future<void> _onLoginPressed() async {
+    if (!_formKey.currentState!.validate()) return;
 
-  setState(() => _isLoading = true);
+    setState(() => _isLoading = true);
 
-  // Aquí luego conectamos con tu API /auth/login/
-  await Future.delayed(const Duration(seconds: 1));
+    try {
+      await widget.authRepository.login(
+        email: _emailController.text.trim(),
+        password: _passwordController.text,
+      );
 
-  setState(() => _isLoading = false);
+      if (!mounted) return;
 
-  if (!mounted) return;
+      // ✅ Login OK → navegar al home
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (_) => const MainShellPage(),
+        ),
+      );
+    } on DioException catch (e) {
+      debugPrint(
+        'Error login (status: ${e.response?.statusCode}) body: ${e.response?.data}',
+      );
 
-  // Opcional: mostrar un mensaje corto
-  ScaffoldMessenger.of(context).showSnackBar(
-    const SnackBar(content: Text('Login simulado OK')),
-  );
+      if (!mounted) return;
 
-  // 👇 Aquí es donde te mando al HOME (MainShellPage)
-  Navigator.of(context).pushReplacement(
-    MaterialPageRoute(
-      builder: (_) => const MainShellPage(),
-    ),
-  );
-}
+      String message =
+          'No se pudo iniciar sesión. Intenta nuevamente.';
+
+      final status = e.response?.statusCode;
+      final data = e.response?.data;
+
+      // Aquí asumimos que el backend devuelve algo tipo:
+      // { "detail": "USER_NOT_FOUND" }  o  { "detail": "WRONG_PASSWORD" }
+      if (status == 401 || status == 404) {
+        String? detail;
+
+        if (data is Map<String, dynamic>) {
+          final d = data['detail'];
+          if (d is String) {
+            detail = d;
+          } else if (d is Map<String, dynamic> && d['code'] is String) {
+            // por si usas { "detail": { "code": "USER_NOT_FOUND", ... } }
+            detail = d['code'] as String;
+          }
+        }
+
+        switch (detail) {
+          case 'USER_NOT_FOUND':
+          case 'user_not_found':
+            message = 'No existe una cuenta registrada con ese correo.';
+            break;
+          case 'WRONG_PASSWORD':
+          case 'wrong_password':
+          case 'INCORRECT_PASSWORD':
+            message = 'La contraseña es incorrecta.';
+            break;
+          default:
+            // si no podemos distinguir, mostramos uno genérico
+            message = 'Correo o contraseña incorrectos.';
+        }
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message)),
+      );
+    } catch (e) {
+      debugPrint('Error inesperado en login: $e');
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Ocurrió un error inesperado. Intenta nuevamente.',
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
 
   void _showTermsDialog() {
     showDialog(
@@ -118,7 +187,6 @@ Future<void> _onLoginPressed() async {
                   ),
                 ),
                 const SizedBox(height: 32),
-
                 Form(
                   key: _formKey,
                   child: Column(
@@ -173,18 +241,16 @@ Future<void> _onLoginPressed() async {
                     ],
                   ),
                 ),
-
                 const SizedBox(height: 8),
                 Align(
                   alignment: Alignment.centerRight,
                   child: TextButton(
                     onPressed: () {
-                      // Aquí luego conectamos con /auth/password/forgot/
+                      // luego conectar con /auth/password/forgot/
                     },
                     child: const Text('¿Olvidaste tu contraseña?'),
                   ),
                 ),
-
                 const SizedBox(height: 16),
                 SizedBox(
                   width: double.infinity,
@@ -199,7 +265,6 @@ Future<void> _onLoginPressed() async {
                         : const Text('Iniciar sesión'),
                   ),
                 ),
-
                 const SizedBox(height: 24),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -209,7 +274,9 @@ Future<void> _onLoginPressed() async {
                       onPressed: () {
                         Navigator.of(context).push(
                           MaterialPageRoute(
-                            builder: (_) => const RegisterPage(),
+                            builder: (_) => RegisterPage(
+                              authRepository: widget.authRepository,
+                            ),
                           ),
                         );
                       },
@@ -217,7 +284,6 @@ Future<void> _onLoginPressed() async {
                     ),
                   ],
                 ),
-
                 const SizedBox(height: 24),
                 Divider(color: Colors.grey.shade800),
                 const SizedBox(height: 8),
@@ -230,8 +296,7 @@ Future<void> _onLoginPressed() async {
                       ),
                       children: [
                         const TextSpan(
-                          text:
-                              'Al continuar aceptas nuestros ',
+                          text: 'Al continuar aceptas nuestros ',
                         ),
                         TextSpan(
                           text: 'Términos',
