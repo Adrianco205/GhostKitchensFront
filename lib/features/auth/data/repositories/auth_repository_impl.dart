@@ -50,7 +50,7 @@ class AuthRepositoryImpl implements AuthRepository {
     String? otp,
   }) async {
     // Solo acepta este usuario demo
-    if (email != 'demo@ghostkitchens.test' || password != 'Demo1234*') {
+    if (email != 'demo@demo.demo' || password != 'Demo1234*') {
       throw Exception('Credenciales demo incorrectas');
     }
 

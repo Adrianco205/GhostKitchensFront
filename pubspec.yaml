@@ -50,3 +50,6 @@ flutter:
   #       - asset: assets/fonts/Montserrat-Regular.ttf
   #       - asset: assets/fonts/Montserrat-Bold.ttf
   #         weight: 700
+
+
+#google_maps_flutter: ^2.0.0  # o la versión estable más reciente
