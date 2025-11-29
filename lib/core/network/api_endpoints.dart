@@ -18,5 +18,8 @@ class ApiEndpoints {
   // ADDRESSES
   static const String userAddresses = '/direcciones';
   static String userAddressDetail(int id) => '/direcciones/$id';
+
+  //MAPA
+  static const String kitchensMap = '/cocinas/map';
 }
 

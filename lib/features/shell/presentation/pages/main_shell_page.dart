@@ -21,7 +21,7 @@ class _MainShellPageState extends State<MainShellPage> {
     super.initState();
     _pages = const [
       HomePage(),        // Inicio
-      KitchensMapPage(), // Mapa
+      //KitchensMapPage(), // Mapa
       CartPage(),        // Carrito
       ProfilePage(),     // Cuenta
     ];
@@ -53,10 +53,6 @@ Widget build(BuildContext context) {
         BottomNavigationBarItem(
           icon: Icon(Icons.home_outlined),
           label: 'Inicio',
-        ),
-        BottomNavigationBarItem(
-          icon: Icon(Icons.map_outlined),
-          label: 'Mapa',
         ),
         BottomNavigationBarItem(
           icon: Icon(Icons.shopping_cart_outlined),
