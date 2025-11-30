@@ -21,7 +21,7 @@ class _SplashPageState extends State<SplashPage> {
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(
           builder: (_) => LoginPage(
-            authRepository: widget.authRepository, // 👈 pasamos el repo al Login
+            authRepository: widget.authRepository,
           ),
         ),
       );
@@ -33,14 +33,16 @@ class _SplashPageState extends State<SplashPage> {
     final theme = Theme.of(context);
 
     return Scaffold(
+      backgroundColor: theme.colorScheme.background,
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              Icons.restaurant_menu,
-              size: 80,
-              color: theme.colorScheme.primary,
+            // 👇 AQUÍ VA TU LOGO
+            Image.asset(
+              'lib/assets/images/logo.png',
+              width: 150,
+              fit: BoxFit.contain,
             ),
             const SizedBox(height: 16),
             Text(

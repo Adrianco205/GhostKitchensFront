@@ -3,6 +3,11 @@ import 'package:ghost_kitchens_app/core/network/api_client.dart';
 import 'package:ghost_kitchens_app/core/network/api_endpoints.dart';
 import 'package:ghost_kitchens_app/search/data/models/search_dto.dart';
 
+// Provider del carrito
+import 'package:provider/provider.dart';
+import 'package:ghost_kitchens_app/features/cart/presentation/cart_provider.dart';
+
+import 'package:ghost_kitchens_app/kitchens/presentation/pages/kitchen_detail_page.dart';
 class SearchResultsPage extends StatefulWidget {
   final String initialQuery;
 
@@ -103,11 +108,32 @@ class _SearchResultsPageState extends State<SearchResultsPage> {
     _focusNode.requestFocus();
   }
 
+  /// Helper para agregar platos al carrito desde search
+  void _addDishToCart(
+    BuildContext context,
+    CartProvider cart,
+    SearchResultItemDto kitchen,
+    DishPreviewDto dish,
+  ) {
+    cart.addFromDish(dish, kitchen.name);
+
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text('${dish.name} agregado al carrito'),
+          duration: const Duration(seconds: 1),
+        ),
+      );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final cart = context.watch<CartProvider>();
 
     return Scaffold(
+      resizeToAvoidBottomInset: false,
       backgroundColor: theme.scaffoldBackgroundColor,
       body: SafeArea(
         child: Column(
@@ -165,7 +191,6 @@ class _SearchResultsPageState extends State<SearchResultsPage> {
                   Expanded(
                     child: GestureDetector(
                       onTap: () {
-                        // luego: bottom sheet real
                         setState(
                           () => _selectedSection = 'Todas las secciones',
                         );
@@ -199,7 +224,6 @@ class _SearchResultsPageState extends State<SearchResultsPage> {
                   Expanded(
                     child: GestureDetector(
                       onTap: () {
-                        // luego: bottom sheet real (por ahora solo texto)
                         setState(() => _selectedOrder = 'Relevancia');
                       },
                       child: Row(
@@ -273,7 +297,11 @@ class _SearchResultsPageState extends State<SearchResultsPage> {
                     separatorBuilder: (_, __) => const SizedBox(height: 16),
                     itemBuilder: (context, index) {
                       final kitchen = _results[index];
-                      return _KitchenResultCard(kitchen: kitchen);
+                      return _KitchenResultCard(
+                        kitchen: kitchen,
+                        onAddDish: (dish) =>
+                            _addDishToCart(context, cart, kitchen, dish),
+                      );
                     },
                   );
                 },
@@ -290,8 +318,12 @@ class _SearchResultsPageState extends State<SearchResultsPage> {
 
 class _KitchenResultCard extends StatelessWidget {
   final SearchResultItemDto kitchen;
+  final void Function(DishPreviewDto) onAddDish;
 
-  const _KitchenResultCard({required this.kitchen});
+  const _KitchenResultCard({
+    required this.kitchen,
+    required this.onAddDish,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -303,171 +335,162 @@ class _KitchenResultCard extends StatelessWidget {
     final time = kitchen.deliveryTimeMin ?? 0;
     final minPrice = kitchen.minPrice ?? 0;
 
-    return Container(
-      decoration: BoxDecoration(
-        color: const Color(0xFF101018),
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.35),
-            blurRadius: 14,
-            offset: const Offset(0, 6),
+    return GestureDetector(
+      onTap: () {
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => KitchenDetailPage(
+              kitchenId: kitchen.id, // 👈 AQUÍ ESTÁ LA MAGIA
+            ),
           ),
-        ],
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Imagen principal del restaurante
-          AspectRatio(
-            aspectRatio: 16 / 9,
-            child: imageUrl.isNotEmpty
-                ? Image.network(
-                    imageUrl,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => Container(
+        );
+      },
+      child: Container(
+        decoration: BoxDecoration(
+          color: const Color(0xFF101018),
+          borderRadius: BorderRadius.circular(18),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.35),
+              blurRadius: 14,
+              offset: const Offset(0, 6),
+            ),
+          ],
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            AspectRatio(
+              aspectRatio: 16 / 9,
+              child: imageUrl.isNotEmpty
+                  ? Image.network(
+                      imageUrl,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => Container(
+                        color: Colors.grey.shade300,
+                        child: const Icon(Icons.fastfood, size: 40),
+                      ),
+                    )
+                  : Container(
                       color: Colors.grey.shade300,
                       child: const Icon(Icons.fastfood, size: 40),
                     ),
-                  )
-                : Container(
-                    color: Colors.grey.shade300,
-                    child: const Icon(Icons.fastfood, size: 40),
-                  ),
-          ),
-
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    if ((kitchen.discount ?? '').isNotEmpty)
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: Colors.yellow.shade600,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          kitchen.discount!,
-                          style: theme.textTheme.labelSmall?.copyWith(
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ),
-                    const Spacer(),
-                    Container(
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.35),
-                            blurRadius: 8,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
-                      ),
-                      child: IconButton(
-                        icon: const Icon(Icons.add),
-                        onPressed: () {
-                          // luego: ir al detalle / añadir al carrito
-                        },
-                      ),
-                    ),
-                  ],
-                ),
-
-                const SizedBox(height: 8),
-
-                Text(
-                  kitchen.name,
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 4),
-
-                Row(
-                  children: [
-                    Text(
-                      '$time min',
-                      style: theme.textTheme.bodySmall,
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      '• \$${minPrice}',
-                      style: theme.textTheme.bodySmall,
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      '• ${distance.toStringAsFixed(1)} km',
-                      style: theme.textTheme.bodySmall,
-                    ),
-                    const SizedBox(width: 6),
-                    Icon(Icons.star,
-                        size: 14, color: Colors.yellow.shade600),
-                    const SizedBox(width: 2),
-                    Text(
-                      rating.toStringAsFixed(1),
-                      style: theme.textTheme.bodySmall,
-                    ),
-                  ],
-                ),
-              ],
             ),
-          ),
 
-          // Platos del restaurante (scroll horizontal)
-          if (kitchen.dishes.isNotEmpty) ...[
-            const SizedBox(height: 4),
-            SizedBox(
-              height: 190,
-              child: ListView.separated(
-                padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-                scrollDirection: Axis.horizontal,
-                itemCount: kitchen.dishes.length,
-                separatorBuilder: (_, __) => const SizedBox(width: 12),
-                itemBuilder: (context, index) {
-                  final dish = kitchen.dishes[index];
-                  return _DishCard(dish: dish);
-                },
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if ((kitchen.discount ?? '').isNotEmpty)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.yellow.shade600,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        kitchen.discount!,
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+
+                  const SizedBox(height: 8),
+
+                  Text(
+                    kitchen.name,
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+
+                  const SizedBox(height: 4),
+
+                  Row(
+                    children: [
+                      Text(
+                        '$time min',
+                        style: theme.textTheme.bodySmall,
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        '• \$${minPrice}',
+                        style: theme.textTheme.bodySmall,
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        '• ${distance.toStringAsFixed(1)} km',
+                        style: theme.textTheme.bodySmall,
+                      ),
+                      const SizedBox(width: 6),
+                      Icon(Icons.star,
+                          size: 14, color: Colors.yellow.shade600),
+                      const SizedBox(width: 2),
+                      Text(
+                        rating.toStringAsFixed(1),
+                        style: theme.textTheme.bodySmall,
+                      ),
+                    ],
+                  ),
+                ],
               ),
             ),
+
+            if (kitchen.dishes.isNotEmpty)
+              SizedBox(
+                height: 230,
+                child: ListView.separated(
+                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 16),
+                  scrollDirection: Axis.horizontal,
+                  itemCount: kitchen.dishes.length,
+                  separatorBuilder: (_, __) => const SizedBox(width: 12),
+                  itemBuilder: (context, index) {
+                    final dish = kitchen.dishes[index];
+                    return _DishCard(
+                      dish: dish,
+                      onAdd: () => onAddDish(dish),
+                    );
+                  },
+                ),
+              ),
           ],
-        ],
+        ),
       ),
     );
   }
 }
 
+
 class _DishCard extends StatelessWidget {
   final DishPreviewDto dish;
+  final VoidCallback onAdd;
 
-  const _DishCard({required this.dish});
+  const _DishCard({
+    required this.dish,
+    required this.onAdd,
+  });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-
     final imageUrl = dish.imageUrl ?? '';
 
     return Container(
-      width: 140,
+      width: 160, // un poco más ancho
       decoration: BoxDecoration(
         color: const Color(0xFF181820),
         borderRadius: BorderRadius.circular(14),
       ),
       clipBehavior: Clip.antiAlias,
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Imagen del plato con proporción estable
+          // Imagen del plato
           AspectRatio(
             aspectRatio: 4 / 3,
             child: imageUrl.isNotEmpty
@@ -486,10 +509,11 @@ class _DishCard extends StatelessWidget {
                   ),
           ),
 
-          // Texto + precio
+          // Texto + precio + botón +
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
             child: Column(
+              mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
@@ -500,12 +524,24 @@ class _DishCard extends StatelessWidget {
                     fontWeight: FontWeight.w500,
                   ),
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  '\$${dish.price}',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
+                const SizedBox(height: 6),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      '\$${dish.price}',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    IconButton(
+                      iconSize: 20,
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                      icon: const Icon(Icons.add_circle_outline),
+                      onPressed: onAdd,
+                    ),
+                  ],
                 ),
               ],
             ),

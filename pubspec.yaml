@@ -41,21 +41,27 @@ dev_dependencies:
   json_serializable: ^6.8.0
   build_runner: ^2.4.8
 
+  # 👇 NUEVO: icono e splash nativo
+  flutter_launcher_icons: ^0.14.1
+  flutter_native_splash: ^2.4.1
+
 flutter:
   uses-material-design: true
 
-  # Activa esto cuando tengas assets
-  # assets:
-  #   - assets/images/
-  #   - assets/icons/
+  # 👇 Activa tus assets donde está el logo
+  assets:
+    - lib/assets/images/
 
-  # Activa esto cuando agregues fuentes
-  # fonts:
-  #   - family: Montserrat
-  #     fonts:
-  #       - asset: assets/fonts/Montserrat-Regular.ttf
-  #       - asset: assets/fonts/Montserrat-Bold.ttf
-  #         weight: 700
+# 👇 Configuración del icono de la app
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "lib/assets/images/logo.png"
 
-
-#google_maps_flutter: ^2.0.0  # o la versión estable más reciente
+# 👇 Configuración del splash nativo (pantalla que sale ANTES de tu SplashPage)
+flutter_native_splash:
+  color: "#000000"                     # puedes cambiar el color si quieres
+  image: "lib/assets/images/logo.png"  # usamos tu mismo logo
+  android: true
+  ios: true
+  android_gravity: center

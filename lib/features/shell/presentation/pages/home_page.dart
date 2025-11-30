@@ -9,6 +9,12 @@ import 'package:ghost_kitchens_app/core/storage/secure_storage.dart';
 import 'package:ghost_kitchens_app/features/addresses/data/models/address_dto.dart';
 import 'package:ghost_kitchens_app/features/addresses/presentation/pages/address_form_page.dart';
 
+import 'package:provider/provider.dart';
+import 'package:ghost_kitchens_app/features/cart/presentation/cart_provider.dart';
+
+// Detalle de cocina
+import 'package:ghost_kitchens_app/kitchens/presentation/pages/kitchen_detail_page.dart';
+
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
 
@@ -24,11 +30,9 @@ class _HomePageState extends State<HomePage> {
   bool _isLoading = false;
   String? _errorMessage;
 
-  /// Texto que se muestra en el header
   String? _selectedAddressText;
   int? _selectedAddressId;
 
-  /// Lista completa de direcciones del usuario
   List<AddressDto> _addresses = [];
   bool _isLoadingAddresses = false;
 
@@ -69,6 +73,9 @@ class _HomePageState extends State<HomePage> {
       final data = response.data as Map<String, dynamic>;
       final home = HomeResponseDto.fromJson(data);
 
+      debugPrint(
+          'HOME loaded => featured: ${home.featuredProducts.length}, recommended: ${home.recommendedProducts.length}, kitchens: ${home.allKitchens.length}');
+
       setState(() {
         _homeData = home;
         _selectedAddressText =
@@ -99,43 +106,42 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-Future<void> _loadAddresses() async {
-  setState(() {
-    _isLoadingAddresses = true;
-  });
+  Future<void> _loadAddresses() async {
+    setState(() {
+      _isLoadingAddresses = true;
+    });
 
-  try {
-    final token = await _secureStorage.accessToken;
-    if (token == null || token.isEmpty) {
-      throw Exception('No hay token de acceso');
+    try {
+      final token = await _secureStorage.accessToken;
+      if (token == null || token.isEmpty) {
+        throw Exception('No hay token de acceso');
+      }
+
+      final response = await _apiClient.get(
+        ApiEndpoints.userAddresses,
+        options: Options(
+          headers: {
+            'Authorization': 'Bearer $token',
+          },
+        ),
+      );
+
+      final data = response.data as List;
+      final addresses = data
+          .map((json) => AddressDto.fromJson(json as Map<String, dynamic>))
+          .toList();
+
+      setState(() {
+        _addresses = addresses;
+      });
+    } catch (e) {
+      debugPrint('ERROR al cargar direcciones: $e');
+    } finally {
+      setState(() {
+        _isLoadingAddresses = false;
+      });
     }
-
-    final response = await _apiClient.get(
-      ApiEndpoints.userAddresses,  // 👈 AQUÍ EL CAMBIO
-      options: Options(
-        headers: {
-          'Authorization': 'Bearer $token',
-        },
-      ),
-    );
-
-    final data = response.data as List;
-    final addresses = data
-        .map((json) => AddressDto.fromJson(json as Map<String, dynamic>))
-        .toList();
-
-    setState(() {
-      _addresses = addresses;
-    });
-  } catch (e) {
-    debugPrint('ERROR al cargar direcciones: $e');
-  } finally {
-    setState(() {
-      _isLoadingAddresses = false;
-    });
   }
-}
-
 
   Future<void> _openAddressSelector() async {
     await _loadAddresses();
@@ -191,12 +197,12 @@ Future<void> _loadAddresses() async {
                                 return ListTile(
                                   leading: Icon(
                                     Icons.location_on_rounded,
-                                    color: Theme.of(context)
-                                        .colorScheme
-                                        .primary,
+                                    color:
+                                        Theme.of(context).colorScheme.primary,
                                   ),
                                   title: Text(
-                                    addr.alias != null && addr.alias!.isNotEmpty
+                                    addr.alias != null &&
+                                            addr.alias!.isNotEmpty
                                         ? '${addr.alias} · ${addr.direccionTexto}'
                                         : addr.direccionTexto,
                                   ),
@@ -234,10 +240,8 @@ Future<void> _loadAddresses() async {
                         );
 
                         if (created == true) {
-                          // recargar direcciones y home
                           await _loadAddresses();
-                          Navigator.of(context).pop(); // cerrar sheet
-                          // si ahora hay direcciones, usamos la última creada
+                          Navigator.of(context).pop();
                           if (_addresses.isNotEmpty) {
                             final last = _addresses.last;
                             setState(() {
@@ -269,12 +273,31 @@ Future<void> _loadAddresses() async {
     );
   }
 
+  /// 👇 Helper para agregar al carrito y mostrar feedback
+  void _addProductToCart(
+    BuildContext context,
+    CartProvider cart,
+    ProductHomeDto product,
+  ) {
+    cart.addFromProduct(product);
+
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text('${product.name} agregado al carrito'),
+          duration: const Duration(seconds: 1),
+        ),
+      );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final size = MediaQuery.of(context).size;
 
-    // Altura del carrusel de promos basada en el ancho de pantalla
+    final cart = context.watch<CartProvider>();
+
     final double promoHeight = size.width * 0.65;
 
     final addressLabel =
@@ -284,8 +307,7 @@ Future<void> _loadAddresses() async {
         _homeData?.featuredProducts ?? const <ProductHomeDto>[];
     final recommendedProducts =
         _homeData?.recommendedProducts ?? const <ProductHomeDto>[];
-    final allKitchens =
-        _homeData?.allKitchens ?? const <CocinaHomeDto>[];
+    final allKitchens = _homeData?.allKitchens ?? const <CocinaHomeDto>[];
 
     if (_isLoading) {
       return const SafeArea(
@@ -341,7 +363,7 @@ Future<void> _loadAddresses() async {
           ),
           const SizedBox(height: 12),
 
-          // Productos destacados
+          /// 🔥 SECCIÓN "¿Un antojo?" CON BOTÓN +
           if (featuredProducts.isNotEmpty)
             SizedBox(
               height: promoHeight,
@@ -351,15 +373,18 @@ Future<void> _loadAddresses() async {
                 separatorBuilder: (_, __) => const SizedBox(width: 12),
                 itemBuilder: (context, index) {
                   final product = featuredProducts[index];
-                  return _BigProductCard(product: product);
+                  return _BigProductCard(
+                    product: product,
+                    onAdd: () =>
+                        _addProductToCart(context, cart, product), // 👈+
+                  );
                 },
               ),
             )
           else
             Text(
               'Pronto verás productos destacados aquí.',
-              style:
-                  theme.textTheme.bodyMedium?.copyWith(color: Colors.grey),
+              style: theme.textTheme.bodyMedium?.copyWith(color: Colors.grey),
             ),
 
           const SizedBox(height: 24),
@@ -375,7 +400,12 @@ Future<void> _loadAddresses() async {
           if (recommendedProducts.isNotEmpty)
             Column(
               children: recommendedProducts
-                  .map((p) => _ProductListTile(product: p))
+                  .map(
+                    (p) => _ProductListTile(
+                      product: p,
+                      onAdd: () => _addProductToCart(context, cart, p), // 👈+
+                    ),
+                  )
                   .toList(),
             )
           else
@@ -398,8 +428,7 @@ Future<void> _loadAddresses() async {
           if (allKitchens.isNotEmpty)
             LayoutBuilder(
               builder: (context, constraints) {
-                final crossAxisCount =
-                    constraints.maxWidth > 600 ? 3 : 2;
+                final crossAxisCount = constraints.maxWidth > 600 ? 3 : 2;
                 return GridView.builder(
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
@@ -412,7 +441,18 @@ Future<void> _loadAddresses() async {
                   ),
                   itemBuilder: (context, index) {
                     final kitchen = allKitchens[index];
-                    return _AssociatedKitchenCard(kitchen: kitchen);
+                    return GestureDetector(
+                      onTap: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => KitchenDetailPage(
+                              kitchenId: kitchen.id,
+                            ),
+                          ),
+                        );
+                      },
+                      child: _AssociatedKitchenCard(kitchen: kitchen),
+                    );
                   },
                 );
               },
@@ -428,8 +468,6 @@ Future<void> _loadAddresses() async {
     );
   }
 }
-
-// =================== WIDGETS ===================
 
 class _Header extends StatelessWidget {
   final String address;
@@ -451,7 +489,7 @@ class _Header extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          '1:28', // placeholder
+          '1:28',
           style: theme.textTheme.bodySmall?.copyWith(
             color: Colors.grey,
           ),
@@ -495,8 +533,8 @@ class _Header extends StatelessWidget {
               borderRadius: BorderRadius.circular(24),
               boxShadow: [
                 BoxShadow(
-                  color:
-                      Colors.black.withOpacity(scaffoldBg == Colors.white ? 0.05 : 0.25),
+                  color: Colors.black
+                      .withOpacity(scaffoldBg == Colors.white ? 0.05 : 0.25),
                   blurRadius: 12,
                   offset: const Offset(0, 4),
                 ),
@@ -525,12 +563,14 @@ class _Header extends StatelessWidget {
   }
 }
 
-// ==== Tarjeta grande de producto destacado ====
-
 class _BigProductCard extends StatelessWidget {
   final ProductHomeDto product;
+  final VoidCallback onAdd;
 
-  const _BigProductCard({required this.product});
+  const _BigProductCard({
+    required this.product,
+    required this.onAdd,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -541,87 +581,116 @@ class _BigProductCard extends StatelessWidget {
 
     return AspectRatio(
       aspectRatio: 3 / 2,
-      child: Container(
-        decoration: BoxDecoration(
-          color: isDark ? const Color(0xFF121212) : Colors.white,
-          borderRadius: BorderRadius.circular(18),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(isDark ? 0.4 : 0.08),
-              blurRadius: 14,
-              offset: const Offset(0, 6),
+      child: Stack(
+        children: [
+          Container(
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF121212) : Colors.white,
+              borderRadius: BorderRadius.circular(18),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(isDark ? 0.4 : 0.08),
+                  blurRadius: 14,
+                  offset: const Offset(0, 6),
+                ),
+              ],
             ),
-          ],
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: Column(
-          children: [
-            Expanded(
-              flex: 2,
-              child: imageUrl != null
-                  ? Image.network(
-                      imageUrl,
-                      fit: BoxFit.cover,
-                      width: double.infinity,
-                      errorBuilder: (_, __, ___) => Container(
-                        color: Colors.grey.shade300,
-                        child: const Icon(Icons.fastfood, size: 40),
-                      ),
-                    )
-                  : Container(
-                      color: Colors.grey.shade300,
-                      child: const Icon(Icons.fastfood, size: 40),
+            clipBehavior: Clip.antiAlias,
+            child: Column(
+              children: [
+                Expanded(
+                  flex: 2,
+                  child: imageUrl != null
+                      ? Image.network(
+                          imageUrl,
+                          fit: BoxFit.cover,
+                          width: double.infinity,
+                          errorBuilder: (_, __, ___) => Container(
+                            color: Colors.grey.shade300,
+                            child: const Icon(Icons.fastfood, size: 40),
+                          ),
+                        )
+                      : Container(
+                          color: Colors.grey.shade300,
+                          child: const Icon(Icons.fastfood, size: 40),
+                        ),
+                ),
+                Expanded(
+                  flex: 1,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 8),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          product.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          product.kitchenName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: Colors.grey,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '\$${product.price.toStringAsFixed(0)}',
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
                     ),
+                  ),
+                ),
+              ],
             ),
-            Expanded(
-              flex: 1,
-              child: Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      product.name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      product.kitchenName,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: Colors.grey,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '\$${product.price.toStringAsFixed(0)}',
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ],
+          ),
+
+          /// 👇 Botón flotante de "+"
+          Positioned(
+            right: 10,
+            bottom: 10,
+            child: Material(
+              color: theme.colorScheme.primary,
+              shape: const CircleBorder(),
+              elevation: 4,
+              child: InkWell(
+                customBorder: const CircleBorder(),
+                onTap: onAdd,
+                child: const Padding(
+                  padding: EdgeInsets.all(6),
+                  child: Icon(
+                    Icons.add,
+                    size: 22,
+                    color: Colors.white,
+                  ),
                 ),
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
 }
 
-// ==== Item de lista para productos recomendados ====
-
 class _ProductListTile extends StatelessWidget {
   final ProductHomeDto product;
+  final VoidCallback onAdd;
 
-  const _ProductListTile({required this.product});
+  const _ProductListTile({
+    required this.product,
+    required this.onAdd,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -681,13 +750,16 @@ class _ProductListTile extends StatelessWidget {
               ],
             ),
           ),
+          const SizedBox(width: 8),
+          IconButton(
+            icon: const Icon(Icons.add_circle_outline),
+            onPressed: onAdd,
+          ),
         ],
       ),
     );
   }
 }
-
-// ==== Card de cocinas asociadas (igual que ya tenías) ====
 
 class _AssociatedKitchenCard extends StatelessWidget {
   final CocinaHomeDto kitchen;
@@ -760,9 +832,8 @@ class _AssociatedKitchenCard extends StatelessWidget {
                             '${kitchen.deliveryTimeMin} min',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: Colors.grey,
-                            ),
+                            style: theme.textTheme.bodySmall
+                                ?.copyWith(color: Colors.grey),
                           ),
                         if (kitchen.deliveryTimeMin != null &&
                             kitchen.distanceKm != null)
@@ -772,9 +843,8 @@ class _AssociatedKitchenCard extends StatelessWidget {
                             '${kitchen.distanceKm!.toStringAsFixed(1)} km',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: Colors.grey,
-                            ),
+                            style: theme.textTheme.bodySmall
+                                ?.copyWith(color: Colors.grey),
                           ),
                       ],
                     ),

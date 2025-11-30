@@ -21,5 +21,9 @@ class ApiEndpoints {
 
   //MAPA
   static const String kitchensMap = '/cocinas/map';
+
+    // Detalle de cocina
+    static String kitchenDetail(int id) => '/cocinas/$id';
+
 }
 
