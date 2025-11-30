@@ -147,15 +147,15 @@ class _PaymentGatewayPageState extends State<PaymentGatewayPage> {
       return;
     }
 
-    // Validar que todos los items tengan IDs reales de backend
-    final hasInvalid = items.any(
-      (it) => it.productId <= 0 || it.kitchenId <= 0,
-    );
+    // 👉 Filtrar productos válidos (ignoramos silenciosamente los inválidos)
+    final List<CartItem> validItems = items
+        .where((it) => it.productId > 0 && it.kitchenId > 0)
+        .toList();
 
-    if (hasInvalid) {
+    // Si no hay nada válido para enviar al backend
+    if (validItems.isEmpty) {
       _showSnack(
-        'Hay productos en el carrito que aún no tienen información completa '
-        'para crear el pedido. Por ahora deja solo los agregados desde Home.',
+        'No hay productos válidos en el carrito para procesar el pedido.',
       );
       return;
     }
@@ -180,7 +180,7 @@ class _PaymentGatewayPageState extends State<PaymentGatewayPage> {
 
       // Agrupar ítems por cocina: PERMITE MÚLTIPLES COCINAS
       final Map<int, List<CartItem>> itemsByKitchen = {};
-      for (final it in items) {
+      for (final it in validItems) {
         itemsByKitchen.putIfAbsent(it.kitchenId, () => []).add(it);
       }
 
