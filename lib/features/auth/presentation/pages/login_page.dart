@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'register_page.dart';
+import 'package:ghost_kitchens_app/features/shell/presentation/pages/main_shell_page.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -24,25 +25,45 @@ class _LoginPageState extends State<LoginPage> {
     super.dispose();
   }
 
-  Future<void> _onLoginPressed() async {
-    if (!_formKey.currentState!.validate()) return;
+Future<void> _onLoginPressed() async {
+  if (!_formKey.currentState!.validate()) return;
 
-    setState(() => _isLoading = true);
+  setState(() => _isLoading = true);
 
-    // Aquí luego conectamos con tu API /auth/login/
-    await Future.delayed(const Duration(seconds: 1));
+  // Simula un delay como si fuera una llamada a la API
+  await Future.delayed(const Duration(seconds: 1));
 
-    setState(() => _isLoading = false);
+  final email = _emailController.text.trim();
+  final password = _passwordController.text.trim();
 
-    // Por ahora solo mostramos un mensaje
+  setState(() => _isLoading = false);
+
+  // --- LOGIN TEMPORAL DE PRUEBA ---
+  if (email == "ejemplo@gmail.com" && password == "12345678") {
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Login simulado OK')),
+        const SnackBar(content: Text('Bienvenido 👌 Login temporal exitoso')),
       );
 
-      // Aquí luego navegaremos al Home real
+      // NAVEGAR AL HOME / MAIN SHELL
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const MainShellPage()),
+      );
     }
+    return;
   }
+
+  // Si las credenciales no coinciden
+  if (mounted) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Credenciales incorrectas'),
+        backgroundColor: Colors.redAccent,
+      ),
+    );
+  }
+}
+
 
   @override
   Widget build(BuildContext context) {
