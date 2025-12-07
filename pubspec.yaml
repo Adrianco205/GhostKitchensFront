@@ -22,7 +22,7 @@ dependencies:
   # === Manejo de estado opcional ===
   provider: ^6.1.2
 
-  # === JSON serialization (lo puedes usar más adelante) ===
+  # === JSON serialization (opcional) ===
   json_annotation: ^4.9.0
 
 dev_dependencies:
@@ -31,22 +31,20 @@ dev_dependencies:
 
   flutter_lints: ^6.0.0
 
-  # Necesarios si luego quieres automatizar DTOs
+  # Para DTOs si los usas
   json_serializable: ^6.8.0
   build_runner: ^2.4.8
+
+  # Íconos de la app
+  flutter_launcher_icons: ^0.14.4
+
+flutter_icons:
+  android: true
+  ios: true
+  image_path: "lib/asset/images/logo.png"
 
 flutter:
   uses-material-design: true
 
-  # Activa esto cuando tengas assets
-  # assets:
-  #   - assets/images/
-  #   - assets/icons/
-
-  # Activa esto cuando agregues fuentes
-  # fonts:
-  #   - family: Montserrat
-  #     fonts:
-  #       - asset: assets/fonts/Montserrat-Regular.ttf
-  #       - asset: assets/fonts/Montserrat-Bold.ttf
-  #         weight: 700
+  assets:
+    - lib/asset/images/
