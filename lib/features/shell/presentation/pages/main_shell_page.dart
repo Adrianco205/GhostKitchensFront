@@ -8,7 +8,7 @@ import 'package:ghost_kitchens_app/features/shell/presentation/home_page.dart';
 import 'package:ghost_kitchens_app/features/cart/presentation/pages/cart_page.dart';
 
 // ✅ Profile correcto (dentro de shell, NO el de features/profile)
-import 'package:ghost_kitchens_app/features/shell/presentation/profile_page.dart';
+import 'package:ghost_kitchens_app/features/profile/presentation/pages/profile_page.dart';
 
 class MainShellPage extends StatefulWidget {
   const MainShellPage({super.key});
