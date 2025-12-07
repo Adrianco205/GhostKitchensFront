@@ -1,13 +1,14 @@
+// lib/features/shell/presentation/pages/main_shell_page.dart
 import 'package:flutter/material.dart';
 
-// Home dentro de shell (lo puedes crear después)
+// Home dentro de shell
 import 'package:ghost_kitchens_app/features/shell/presentation/home_page.dart';
 
 // Cart
 import 'package:ghost_kitchens_app/features/cart/presentation/pages/cart_page.dart';
 
-// Profile
-import 'package:ghost_kitchens_app/features/profile/presentation/pages/profile_page.dart';
+// ✅ Profile correcto (dentro de shell, NO el de features/profile)
+import 'package:ghost_kitchens_app/features/shell/presentation/profile_page.dart';
 
 class MainShellPage extends StatefulWidget {
   const MainShellPage({super.key});
@@ -45,18 +46,14 @@ class _MainShellPageState extends State<MainShellPage> {
 
     return Scaffold(
       body: _pages[_currentIndex],
-
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,
         onTap: _onItemTapped,
         type: BottomNavigationBarType.fixed,
-
         selectedItemColor: orange,
         unselectedItemColor: Colors.grey,
         backgroundColor: theme.scaffoldBackgroundColor,
-
         showUnselectedLabels: true,
-
         items: const [
           BottomNavigationBarItem(
             icon: Icon(Icons.home_outlined),

@@ -1,9 +1,17 @@
+// lib/features/shell/presentation/home_page.dart
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+
 import 'package:ghost_kitchens_app/features/kitchens/presentation/pages/kitchen_detail_page.dart';
 
 // 📍 Addresses
 import 'package:ghost_kitchens_app/features/addresses/presentation/pages/address_form_page.dart';
 import 'package:ghost_kitchens_app/features/addresses/presentation/pages/address_list_page.dart';
+
+// 🧾 Orders
+import 'package:ghost_kitchens_app/features/orders/presentation/pages/order_history_provider.dart';
+import 'package:ghost_kitchens_app/features/orders/presentation/pages/order_tracking_page.dart';
+import 'package:ghost_kitchens_app/features/orders/domain/order_summary.dart';
 
 /// Modelo UI temporal para representar una cocina en la Home.
 /// Más adelante esto vendrá del backend usando ApiClient y ApiEndpoints.home.
@@ -211,10 +219,9 @@ class _HomePageState extends State<HomePage> {
                     width: double.infinity,
                     child: OutlinedButton.icon(
                       onPressed: () {
-                        // Pantalla de listado/edición de direcciones
                         Navigator.of(context).push(
                           MaterialPageRoute(
-                            builder: (_) => AddressListPage(),
+                            builder: (_) => const AddressListPage(),
                           ),
                         );
                       },
@@ -259,69 +266,100 @@ class _HomePageState extends State<HomePage> {
     final addressLabel =
         _selectedAddressText ?? 'Selecciona una dirección de entrega';
 
-    return SafeArea(
-      child: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
-        children: [
-          // -------- HEADER CON DIRECCIÓN --------
-          _Header(
-            address: addressLabel,
-            onSelectAddress: _openAddressSelector,
-          ),
+    // 🔥 Pedido activo desde el OrderHistoryProvider
+    final OrderSummary? activeOrder =
+        context.watch<OrderHistoryProvider>().activeOrder;
 
-          const SizedBox(height: 24),
+    return Stack(
+      children: [
+        // Contenido principal
+        SafeArea(
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+            children: [
+              // -------- HEADER CON DIRECCIÓN --------
+              _Header(
+                address: addressLabel,
+                onSelectAddress: _openAddressSelector,
+              ),
 
-          // -------- TÍTULO PRINCIPAL --------
-          Text(
-            'Todas nuestras cocinas asociadas',
-            style: theme.textTheme.titleLarge?.copyWith(
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Explora las cocinas disponibles en tu ciudad y descubre nuevos sabores.',
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: Colors.grey,
-            ),
-          ),
-          const SizedBox(height: 16),
+              const SizedBox(height: 24),
 
-          // -------- GRID DE COCINAS --------
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final crossAxisCount = constraints.maxWidth > 600 ? 3 : 2;
-
-              return GridView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                itemCount: _mockKitchens.length,
-                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: crossAxisCount,
-                  mainAxisSpacing: 12,
-                  crossAxisSpacing: 12,
-                  childAspectRatio: 3 / 4,
+              // -------- TÍTULO PRINCIPAL --------
+              Text(
+                'Todas nuestras cocinas asociadas',
+                style: theme.textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.w700,
                 ),
-                itemBuilder: (context, index) {
-                  final kitchen = _mockKitchens[index];
-                  return GestureDetector(
-                    onTap: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => KitchenDetailPage(
-                            kitchenId: kitchen.id,
-                          ),
-                        ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Explora las cocinas disponibles en tu ciudad y descubre nuevos sabores.',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: Colors.grey,
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              // -------- GRID DE COCINAS --------
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final crossAxisCount =
+                      constraints.maxWidth > 600 ? 3 : 2;
+
+                  return GridView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: _mockKitchens.length,
+                    gridDelegate:
+                        SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: crossAxisCount,
+                      mainAxisSpacing: 12,
+                      crossAxisSpacing: 12,
+                      childAspectRatio: 3 / 4,
+                    ),
+                    itemBuilder: (context, index) {
+                      final kitchen = _mockKitchens[index];
+                      return GestureDetector(
+                        onTap: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => KitchenDetailPage(
+                                kitchenId: kitchen.id,
+                              ),
+                            ),
+                          );
+                        },
+                        child: _AssociatedKitchenCard(kitchen: kitchen),
                       );
                     },
-                    child: _AssociatedKitchenCard(kitchen: kitchen),
                   );
                 },
-              );
-            },
+              ),
+            ],
           ),
-        ],
-      ),
+        ),
+
+        // 🔵 Botón flotante de pedido activo (solo si hay uno)
+        if (activeOrder != null)
+          Positioned(
+            right: 16,
+            bottom: 16,
+            child: FloatingActionButton.extended(
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => OrderTrackingPage(
+                      order: activeOrder,
+                    ),
+                  ),
+                );
+              },
+              icon: const Icon(Icons.delivery_dining),
+              label: const Text('Pedido en curso'),
+            ),
+          ),
+      ],
     );
   }
 }

@@ -1,4 +1,9 @@
+// lib/features/menu/presentation/pages/product_detail_page.dart
+
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+
+import 'package:ghost_kitchens_app/features/cart/presentation/pages/cart_provider.dart';
 
 class ProductDetailPage extends StatelessWidget {
   final String kitchenName;
@@ -7,6 +12,9 @@ class ProductDetailPage extends StatelessWidget {
   final double price;
   final String? imageUrl;
 
+  /// Opcional: si luego le pasas el id real del producto desde la cocina.
+  final int? productId;
+
   const ProductDetailPage({
     super.key,
     required this.kitchenName,
@@ -14,6 +22,7 @@ class ProductDetailPage extends StatelessWidget {
     this.description,
     required this.price,
     this.imageUrl,
+    this.productId,
   });
 
   @override
@@ -124,16 +133,29 @@ class ProductDetailPage extends StatelessWidget {
 
             const SizedBox(height: 32),
 
-            // Botón de ejemplo (sin lógica real de carrito)
+            // Botón: agregar al carrito usando CartProvider
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
                 onPressed: () {
+                  final cart = context.read<CartProvider>();
+
+                  // ID simple para pruebas si no tienes id real aún
+                  final int id = productId ?? productName.hashCode;
+
+                  cart.addItem(
+                    id: id,
+                    name: productName,
+                    price: price,
+                    imageUrl: imageUrl,
+                    kitchenName: kitchenName,
+                  );
+
                   ScaffoldMessenger.of(context)
                     ..hideCurrentSnackBar()
                     ..showSnackBar(
                       const SnackBar(
-                        content: Text('Funcionalidad de carrito próximamente 😄'),
+                        content: Text('Producto agregado al carrito 🛒'),
                         duration: Duration(seconds: 1),
                       ),
                     );
