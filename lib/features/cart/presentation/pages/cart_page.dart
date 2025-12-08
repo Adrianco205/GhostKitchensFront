@@ -1,516 +1,358 @@
-// lib/features/cart/presentation/pages/cart_page.dart
-
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:dio/dio.dart';
+import 'package:ghost_kitchens_app/core/network/api_client.dart';
+import 'package:ghost_kitchens_app/features/cart/presentation/provider/cart_provider.dart';
+import 'package:ghost_kitchens_app/features/orders/data/datasource/orders_remote_datasource.dart';
+import 'package:ghost_kitchens_app/features/shell/presentation/pages/main_shell_page.dart';
+import 'package:ghost_kitchens_app/features/orders/data/models/order_dto.dart';
+import 'package:ghost_kitchens_app/features/payments/presentation/pages/payment_card_page.dart';
 
-import 'package:ghost_kitchens_app/features/cart/presentation/pages/cart_provider.dart';
-import 'package:ghost_kitchens_app/features/cart/presentation/widgets/cart_item_tile.dart';
-
-// 🧾 Orders
-import 'package:ghost_kitchens_app/features/orders/domain/order_summary.dart';
-import 'package:ghost_kitchens_app/features/orders/presentation/pages/order_history_provider.dart';
-import 'package:ghost_kitchens_app/features/orders/presentation/pages/order_tracking_page.dart';
-
-/// Métodos de pago soportados en el flujo simulado.
-/// Se mapean a los CUS-05 / CUS-06.
-enum PaymentMethodType { efectivo, datafono, online }
-
-extension PaymentMethodTypeX on PaymentMethodType {
-  String get label {
-    switch (this) {
-      case PaymentMethodType.efectivo:
-        return 'Efectivo';
-      case PaymentMethodType.datafono:
-        return 'Datáfono';
-      case PaymentMethodType.online:
-        return 'Pago en línea';
-    }
-  }
-
-  String get description {
-    switch (this) {
-      case PaymentMethodType.efectivo:
-        return 'Pagas al recibir tu pedido.';
-      case PaymentMethodType.datafono:
-        return 'Pagas con tarjeta en datáfono al recibir.';
-      case PaymentMethodType.online:
-        return 'Simula un pago con pasarela (no real).';
-    }
-  }
-}
-
-class CartPage extends StatefulWidget {
+class CartPage extends StatelessWidget {
   const CartPage({super.key});
 
   @override
-  State<CartPage> createState() => _CartPageState();
-}
-
-class _CartPageState extends State<CartPage> {
-  PaymentMethodType? _selectedMethod;
-  bool _isConfirming = false;
-
-  @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final cart = context.watch<CartProvider>();
-    final items = cart.items;
-
-    // Pedido activo desde el historial (el último que se confirmó)
-    final OrderSummary? activeOrder =
-        context.watch<OrderHistoryProvider>().activeOrder;
-
-    final bool hasItems = items.isNotEmpty;
-    final bool showOrderSummary = !hasItems && activeOrder != null;
+    final cart = Provider.of<CartProvider>(context);
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Carrito'),
+        title: const Text("Carrito de Compras"),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        centerTitle: true,
       ),
-      body: showOrderSummary
-          ? _OrderConfirmedView(order: activeOrder!)
-          : items.isEmpty
-              ? Center(
-                  child: Text(
-                    'Tu carrito está vacío.',
-                    style: theme.textTheme.bodyMedium
-                        ?.copyWith(color: Colors.grey),
+      body: Column(
+        children: [
+          // --- LISTA DE PRODUCTOS ---
+          Expanded(
+            child: cart.items.isEmpty
+                ? _buildEmptyState()
+                : ListView.builder(
+                    padding: const EdgeInsets.all(16),
+                    itemCount: cart.items.length,
+                    itemBuilder: (context, index) {
+                      final item = cart.items[index];
+                      final imageUrl = 'https://ui-avatars.com/api/?name=${Uri.encodeComponent(item.product.nombre)}&background=random&size=128';
+
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 16),
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF1E2029),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Row(
+                          children: [
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(12),
+                              child: Image.network(imageUrl, width: 70, height: 70, fit: BoxFit.cover),
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    item.product.nombre,
+                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  Text(
+                                    "\$${item.product.precio.toStringAsFixed(0)} x ${item.quantity}",
+                                    style: TextStyle(color: Colors.grey[400], fontSize: 13),
+                                  ),
+                                  Text(
+                                    "Total: \$${item.total.toStringAsFixed(0)}",
+                                    style: const TextStyle(color: Colors.orange, fontWeight: FontWeight.bold, fontSize: 13),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
+                              onPressed: () {
+                                // TODO: Implementar eliminar
+                              },
+                            )
+                          ],
+                        ),
+                      );
+                    },
                   ),
-                )
-              : ListView.separated(
-                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
-                  itemCount: items.length,
-                  separatorBuilder: (_, __) => const Divider(height: 1),
-                  itemBuilder: (context, index) {
-                    final item = items[index];
-                    return CartItemTile(item: item);
-                  },
+          ),
+
+          // --- TOTAL Y BOTÓN DE PAGO ---
+          if (cart.items.isNotEmpty)
+            SafeArea(
+              child: Container(
+                padding: const EdgeInsets.all(24),
+                decoration: const BoxDecoration(
+                  color: Color(0xFF1E2029),
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
                 ),
-      bottomNavigationBar: hasItems
-          ? _CartBottomBar(
-              isDisabled: items.isEmpty || _isConfirming,
-              totalAmount: cart.totalAmount,
-              selectedMethod: _selectedMethod,
-              onSelectMethod: () => _openPaymentMethodSelector(context),
-              onConfirmOrder: () => _confirmOrder(context, cart),
-            )
-          : null,
-    );
-  }
-
-  /// UI Seleccionar método de pago (CUS-05).
-  Future<void> _openPaymentMethodSelector(BuildContext context) async {
-    final theme = Theme.of(context);
-
-    final method = await showModalBottomSheet<PaymentMethodType>(
-      context: context,
-      isScrollControlled: false,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
-      ),
-      builder: (ctx) {
-        PaymentMethodType? tempSelected = _selectedMethod;
-
-        return StatefulBuilder(
-          builder: (context, setModalState) {
-            return SafeArea(
-              child: Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 child: Column(
-                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Container(
-                      width: 40,
-                      height: 4,
-                      margin: const EdgeInsets.only(bottom: 12),
-                      decoration: BoxDecoration(
-                        color: Colors.grey.shade400,
-                        borderRadius: BorderRadius.circular(2),
-                      ),
-                    ),
-                    Text(
-                      'Selecciona el método de pago',
-                      style: theme.textTheme.titleMedium
-                          ?.copyWith(fontWeight: FontWeight.w600),
-                    ),
-                    const SizedBox(height: 12),
-
-                    // Lista de métodos
-                    ...PaymentMethodType.values.map(
-                      (m) => RadioListTile<PaymentMethodType>(
-                        value: m,
-                        groupValue: tempSelected,
-                        onChanged: (value) {
-                          setModalState(() {
-                            tempSelected = value;
-                          });
-                        },
-                        title: Text(m.label),
-                        subtitle: Text(
-                          m.description,
-                          style: theme.textTheme.bodySmall
-                              ?.copyWith(color: Colors.grey),
-                        ),
-                      ),
-                    ),
-
-                    const SizedBox(height: 8),
-
                     Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Expanded(
-                          child: TextButton(
-                            onPressed: () => Navigator.of(context).pop(null),
-                            child: const Text('Cancelar'),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: ElevatedButton(
-                            onPressed: tempSelected == null
-                                ? null
-                                : () => Navigator.of(context)
-                                    .pop(tempSelected),
-                            child: const Text('Confirmar'),
-                          ),
+                        const Text("Total a Pagar", style: TextStyle(fontSize: 18, color: Colors.grey)),
+                        Text(
+                          "\$${cart.totalToPay.toStringAsFixed(0)}",
+                          style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 24),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 50,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.orange,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        onPressed: () => _handlePaymentFlow(context, cart),
+                        child: const Text(
+                          "Seleccionar Pago",
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                        ),
+                      ),
+                    ),
                   ],
                 ),
               ),
-            );
-          },
-        );
-      },
-    );
-
-    if (method != null) {
-      setState(() {
-        _selectedMethod = method;
-      });
-    }
-  }
-
-  /// Confirmar pedido (incluye CUS-05 y la extensión CUS-06 si aplica).
-  Future<void> _confirmOrder(BuildContext context, CartProvider cart) async {
-    if (cart.items.isEmpty || _isConfirming) return;
-
-    final method = _selectedMethod;
-    if (method == null) {
-      // Debe seleccionar un método primero
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Selecciona un método de pago.')),
-      );
-      await _openPaymentMethodSelector(context);
-      return;
-    }
-
-    setState(() {
-      _isConfirming = true;
-    });
-
-    bool paymentOk = true;
-
-    // Si eligió pago en línea → simular CUS-06
-    if (method == PaymentMethodType.online) {
-      paymentOk = await _simulateElectronicPayment(context, cart.totalAmount);
-    }
-
-    if (!paymentOk) {
-      setState(() {
-        _isConfirming = false;
-      });
-      // CUS-06: pago rechazado o cancelado → puede volver a seleccionar
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Pago cancelado o rechazado. El pedido no fue creado.'),
-        ),
-      );
-      return;
-    }
-
-    // Registrar pedido en historial (CUS-07) y marcar como activo
-    final history = context.read<OrderHistoryProvider>();
-    history.registerOrder(
-      items: cart.items,
-      total: cart.totalAmount,
-      metodoPago: method.label,
-    );
-
-    cart.clear(); // Limpia carrito tras crear pedido
-
-    setState(() {
-      _isConfirming = false;
-      _selectedMethod = null;
-    });
-
-    if (!mounted) return;
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('¡Pedido creado y guardado en tu historial!'),
+            ),
+        ],
       ),
     );
-
-    // 🔴 IMPORTANTE: ya NO hacemos Navigator.pop()
-    // Nos quedamos en la página de carrito, que ahora mostrará
-    // el resumen del pedido activo.
   }
 
-  /// Simulación de PROCESAR PAGO ELECTRÓNICO (CUS-06).
-  Future<bool> _simulateElectronicPayment(
-      BuildContext context, double total) async {
-    final result = await showDialog<bool>(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) {
-        bool isProcessing = false;
+  Widget _buildEmptyState() {
+    return const Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.shopping_cart_outlined, size: 80, color: Colors.grey),
+          SizedBox(height: 16),
+          Text("Tu carrito está vacío", style: TextStyle(color: Colors.grey, fontSize: 18)),
+        ],
+      ),
+    );
+  }
 
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            return AlertDialog(
-              title: const Text('Pago en línea (simulado)'),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    'Total a pagar: \$${total.toStringAsFixed(0)}',
-                  ),
-                  const SizedBox(height: 12),
-                  if (isProcessing)
-                    const Padding(
-                      padding: EdgeInsets.only(top: 4),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          CircularProgressIndicator(strokeWidth: 2),
-                          SizedBox(width: 8),
-                          Text('Procesando pago...'),
-                        ],
-                      ),
-                    )
-                  else
-                    Text(
-                      'Este pago es solo una simulación.\n'
-                      'Puedes marcarlo como exitoso o cancelarlo.',
-                      textAlign: TextAlign.center,
-                    ),
-                ],
-              ),
-              actions: [
-                TextButton(
-                  onPressed: isProcessing
-                      ? null
-                      : () => Navigator.of(context).pop(false),
-                  child: const Text('Cancelar'),
-                ),
-                ElevatedButton(
-                  onPressed: isProcessing
-                      ? null
-                      : () async {
-                          setDialogState(() {
-                            isProcessing = true;
-                          });
-                          await Future.delayed(const Duration(seconds: 2));
-                          if (context.mounted) {
-                            Navigator.of(context).pop(true);
-                          }
-                        },
-                  child: const Text('Pagar ahora'),
-                ),
-              ],
-            );
-          },
-        );
-      },
+  // --- LÓGICA DE FLUJO DE PAGO ---
+  Future<void> _handlePaymentFlow(BuildContext context, CartProvider cart) async {
+    // 1. Abrimos el modal y esperamos respuesta (true/false)
+    final result = await showModalBottomSheet<bool>(
+      context: context,
+      backgroundColor: const Color(0xFF0F111A),
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (context) => _PaymentModalContent(cart: cart),
     );
 
-    // true → pago exitoso, false / null → cancelado o error
-    return result ?? false;
+    // 2. Si el resultado es TRUE, significa que el pago fue EFECTIVO/DATÁFONO y exitoso.
+    // (Si fue LINEA, el modal redirigió a otra pantalla y retornó false/null, así que no entra aquí).
+    if (result == true) {
+      if (!context.mounted) return;
+
+      cart.clearCart();
+
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => AlertDialog(
+          backgroundColor: const Color(0xFF1E2029),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Icon(Icons.check_circle, color: Colors.green, size: 60),
+          content: const Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text("¡Pedido Confirmado!", style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
+              SizedBox(height: 8),
+              Text("Tu comida fantasma está en camino 👻", style: TextStyle(color: Colors.white70), textAlign: TextAlign.center),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pushAndRemoveUntil(
+                  MaterialPageRoute(builder: (_) => const MainShellPage()),
+                  (route) => false,
+                );
+              },
+              child: const Text("Ir al Inicio", style: TextStyle(color: Colors.orange)),
+            )
+          ],
+        ),
+      );
+    }
   }
 }
 
-/// Vista que se muestra cuando no hay items en el carrito
-/// pero sí hay un pedido activo recién creado.
-class _OrderConfirmedView extends StatelessWidget {
-  final OrderSummary order;
+// --- CONTENIDO DEL MODAL ---
+class _PaymentModalContent extends StatefulWidget {
+  final CartProvider cart;
+  const _PaymentModalContent({required this.cart});
 
-  const _OrderConfirmedView({required this.order});
+  @override
+  State<_PaymentModalContent> createState() => _PaymentModalContentState();
+}
+
+class _PaymentModalContentState extends State<_PaymentModalContent> {
+  String _selectedMethod = "EFECTIVO";
+  bool _isProcessing = false;
+  final OrdersRemoteDataSource _ordersService = OrdersRemoteDataSource(ApiClient());
+
+  Future<void> _processPayment() async {
+    // ---------------------------------------------------------
+    // CASO 1: PAGO EN LÍNEA -> Redirigir a PaymentCardPage
+    // ---------------------------------------------------------
+    if (_selectedMethod == "LINEA") {
+      Navigator.pop(context, false); // Cerramos modal (false para que CartPage no muestre éxito aún)
+
+      // Navegamos a la pantalla de tarjeta
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => PaymentCardPage(cart: widget.cart),
+        ),
+      );
+      return; // Terminamos aquí, PaymentCardPage se encarga del resto
+    }
+
+    // ---------------------------------------------------------
+    // CASO 2: EFECTIVO O DATÁFONO -> Procesar directamente
+    // ---------------------------------------------------------
+    setState(() => _isProcessing = true);
+
+    try {
+      final itemsDto = widget.cart.items.map((item) => OrderItemDto(
+        productoId: item.product.id,
+        cantidad: item.quantity,
+      )).toList();
+
+      final orderDto = OrderCreateDto(
+        items: itemsDto,
+        direccionId: 1, // ID fijo temporalmente
+        metodoPago: _selectedMethod,
+      );
+
+      await _ordersService.createOrder(orderDto);
+
+      if (!mounted) return;
+
+      // Retornamos TRUE para que CartPage muestre el diálogo de éxito
+      Navigator.pop(context, true);
+
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Error: ${e.toString()}"), backgroundColor: Colors.red),
+      );
+    } finally {
+      if (mounted) setState(() => _isProcessing = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
     return Padding(
-      padding: const EdgeInsets.all(16),
-      child: ListView(
+      padding: const EdgeInsets.all(24.0),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey[700], borderRadius: BorderRadius.circular(2)))),
           const SizedBox(height: 24),
-          Center(
-            child: Icon(
-              Icons.check_circle_rounded,
-              size: 72,
-              color: theme.colorScheme.primary,
-            ),
-          ),
-          const SizedBox(height: 16),
-          Center(
-            child: Text(
-              '¡Pedido confirmado!',
-              style: theme.textTheme.titleLarge
-                  ?.copyWith(fontWeight: FontWeight.w700),
-            ),
-          ),
-          const SizedBox(height: 8),
-          Center(
-            child: Text(
-              'Pedido #${order.id} creado correctamente.',
-              style:
-                  theme.textTheme.bodyMedium?.copyWith(color: Colors.grey),
-            ),
-          ),
+          const Text("Método de pago", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
           const SizedBox(height: 24),
-          Text(
-            'Resumen',
-            style: theme.textTheme.titleMedium
-                ?.copyWith(fontWeight: FontWeight.w600),
+
+          _PaymentOption(
+            icon: Icons.money, title: "Efectivo", subtitle: "Pagas al recibir", value: "EFECTIVO",
+            groupValue: _selectedMethod, onChanged: (val) => setState(() => _selectedMethod = val!),
           ),
-          const SizedBox(height: 8),
-          ...order.items.map(
-            (item) => ListTile(
-              contentPadding: EdgeInsets.zero,
-              title: Text(item.name),
-              subtitle: Text(
-                '${item.quantity} x \$${item.price.toStringAsFixed(0)}',
-              ),
-              trailing: Text(
-                '\$${item.total.toStringAsFixed(0)}',
-                style: theme.textTheme.bodyMedium
-                    ?.copyWith(fontWeight: FontWeight.w600),
-              ),
-            ),
+          _PaymentOption(
+            icon: Icons.credit_card, title: "Datáfono", subtitle: "Tarjeta contra entrega", value: "DATAFONO",
+            groupValue: _selectedMethod, onChanged: (val) => setState(() => _selectedMethod = val!),
           ),
-          const Divider(),
+          _PaymentOption(
+            icon: Icons.phonelink_ring, title: "Pago en línea", subtitle: "Simulación Wompi", value: "LINEA",
+            groupValue: _selectedMethod, onChanged: (val) => setState(() => _selectedMethod = val!),
+          ),
+
+          const SizedBox(height: 32),
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                'Total',
-                style: theme.textTheme.bodyMedium
-                    ?.copyWith(fontWeight: FontWeight.w600),
+              Expanded(
+                child: TextButton(
+                  onPressed: _isProcessing ? null : () => Navigator.pop(context, false),
+                  child: const Text("Cancelar", style: TextStyle(color: Colors.white70)),
+                ),
               ),
-              Text(
-                '\$${order.total.toStringAsFixed(0)}',
-                style: theme.textTheme.titleMedium
-                    ?.copyWith(fontWeight: FontWeight.w700),
+              Expanded(
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.orange,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  onPressed: _isProcessing ? null : _processPayment,
+                  child: _isProcessing
+                    ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                    : Text(_selectedMethod == "LINEA" ? "Continuar" : "Confirmar Pedido",
+                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                ),
               ),
             ],
           ),
-          const SizedBox(height: 8),
-          Text(
-            'Método de pago: ${order.paymentMethod}',
-            style: theme.textTheme.bodySmall,
-          ),
-          const SizedBox(height: 24),
-          SizedBox(
-            width: double.infinity,
-            child: OutlinedButton.icon(
-              icon: const Icon(Icons.delivery_dining),
-              label: const Text('Ver detalle y seguimiento'),
-              onPressed: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => OrderTrackingPage(order: order),
-                  ),
-                );
-              },
-            ),
-          ),
+          const SizedBox(height: 16),
         ],
       ),
     );
   }
 }
 
-/// Barra inferior del carrito: total + selección de método + confirmar.
-class _CartBottomBar extends StatelessWidget {
-  final double totalAmount;
-  final PaymentMethodType? selectedMethod;
-  final VoidCallback onSelectMethod;
-  final VoidCallback onConfirmOrder;
-  final bool isDisabled;
+class _PaymentOption extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final String value;
+  final String groupValue;
+  final ValueChanged<String?> onChanged;
 
-  const _CartBottomBar({
-    required this.totalAmount,
-    required this.selectedMethod,
-    required this.onSelectMethod,
-    required this.onConfirmOrder,
-    required this.isDisabled,
-  });
+  const _PaymentOption({required this.icon, required this.title, required this.subtitle, required this.value, required this.groupValue, required this.onChanged});
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: theme.scaffoldBackgroundColor,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.2),
-            blurRadius: 8,
-            offset: const Offset(0, -2),
-          ),
-        ],
-      ),
-      child: SafeArea(
-        top: false,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
+    final isSelected = value == groupValue;
+    return GestureDetector(
+      onTap: () => onChanged(value),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 16),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          border: Border.all(color: isSelected ? Colors.orange : Colors.transparent, width: 2),
+          borderRadius: BorderRadius.circular(12),
+          color: const Color(0xFF1E2029),
+        ),
+        child: Row(
           children: [
-            // Total
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  'Total',
-                  style: theme.textTheme.titleMedium
-                      ?.copyWith(fontWeight: FontWeight.w600),
-                ),
-                Text(
-                  '\$${totalAmount.toStringAsFixed(0)}',
-                  style: theme.textTheme.titleMedium
-                      ?.copyWith(fontWeight: FontWeight.w700),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-
-            // Método de pago seleccionado
-            Align(
-              alignment: Alignment.centerLeft,
-              child: TextButton.icon(
-                onPressed: isDisabled ? null : onSelectMethod,
-                icon: const Icon(Icons.payment),
-                label: Text(
-                  selectedMethod?.label ?? 'Seleccionar método de pago',
-                ),
+            Icon(isSelected ? Icons.radio_button_checked : Icons.radio_button_off, color: isSelected ? Colors.orange : Colors.grey),
+            const SizedBox(width: 16),
+            Icon(icon, color: Colors.white70),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                  Text(subtitle, style: const TextStyle(color: Colors.grey, fontSize: 12)),
+                ],
               ),
-            ),
-
-            const SizedBox(height: 8),
-
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: isDisabled ? null : onConfirmOrder,
-                child: const Text('Confirmar pedido'),
-              ),
-            ),
+            )
           ],
         ),
       ),

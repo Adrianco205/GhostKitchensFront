@@ -1,171 +1,164 @@
-// lib/features/menu/presentation/pages/product_detail_page.dart
-
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:ghost_kitchens_app/core/network/api_client.dart';
+import 'package:ghost_kitchens_app/features/cart/presentation/provider/cart_provider.dart';
+import 'package:ghost_kitchens_app/features/kitchens/data/models/product_dto.dart';
+import 'package:ghost_kitchens_app/features/menu/data/datasource/menu_remote_datasource.dart';
 
-import 'package:ghost_kitchens_app/features/cart/presentation/pages/cart_provider.dart';
+class ProductDetailPage extends StatefulWidget {
+  final int productId;
 
-class ProductDetailPage extends StatelessWidget {
-  final String kitchenName;
-  final String productName;
-  final String? description;
-  final double price;
-  final String? imageUrl;
+  const ProductDetailPage({super.key, required this.productId});
 
-  /// Opcional: si luego le pasas el id real del producto desde la cocina.
-  final int? productId;
+  @override
+  State<ProductDetailPage> createState() => _ProductDetailPageState();
+}
 
-  const ProductDetailPage({
-    super.key,
-    required this.kitchenName,
-    required this.productName,
-    this.description,
-    required this.price,
-    this.imageUrl,
-    this.productId,
-  });
+class _ProductDetailPageState extends State<ProductDetailPage> {
+  late MenuRemoteDataSource _dataSource;
+  late Future<ProductDto> _productFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _dataSource = MenuRemoteDataSource(ApiClient());
+    _productFuture = _dataSource.getProductDetail(widget.productId);
+  }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-
     return Scaffold(
+      extendBodyBehindAppBar: true, // Para que la imagen suba hasta la barra de estado
       appBar: AppBar(
-        title: Text(productName),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        iconTheme: const IconThemeData(color: Colors.white, shadows: [Shadow(color: Colors.black, blurRadius: 10)]),
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Imagen grande del producto
-            AspectRatio(
-              aspectRatio: 4 / 3,
-              child: Container(
-                decoration: BoxDecoration(
-                  color: isDark ? const Color(0xFF151515) : Colors.grey.shade200,
-                  borderRadius: BorderRadius.circular(16),
+      body: FutureBuilder<ProductDto>(
+        future: _productFuture,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (snapshot.hasError) {
+            return const Center(child: Text("Error al cargar producto"));
+          }
+          
+          final product = snapshot.data!;
+          // Placeholder de imagen (cuando tengas reales en BD, usa product.imagenUrl)
+          final imageUrl = 'https://source.unsplash.com/800x600/?food,${product.nombre.replaceAll(" ", "")}';
+
+          return Stack(
+            children: [
+              // 1. Imagen de Fondo
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                height: 350,
+                child: Image.network(
+                  imageUrl,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_,__,___) => Container(color: Colors.grey),
                 ),
-                clipBehavior: Clip.antiAlias,
-                child: imageUrl != null
-                    ? Image.network(
-                        imageUrl!,
-                        fit: BoxFit.cover,
-                        width: double.infinity,
-                        errorBuilder: (_, __, ___) => Center(
-                          child: Icon(
-                            Icons.fastfood,
-                            size: 40,
-                            color: Colors.grey.shade600,
-                          ),
-                        ),
-                      )
-                    : Center(
-                        child: Icon(
-                          Icons.fastfood,
-                          size: 40,
-                          color: Colors.grey.shade600,
+              ),
+
+              // 2. Contenido (Scrollable)
+              Positioned.fill(
+                top: 320, // Empieza un poco antes de que termine la imagen
+                child: Container(
+                  padding: const EdgeInsets.all(24),
+                  decoration: const BoxDecoration(
+                    color: Color(0xFF0F111A), // Color de fondo oscuro (ajusta a tu theme)
+                    borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Título
+                      Text(
+                        product.nombre,
+                        style: const TextStyle(
+                          fontSize: 24, 
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white
                         ),
                       ),
-              ),
-            ),
-
-            const SizedBox(height: 20),
-
-            // Nombre producto
-            Text(
-              productName,
-              style: theme.textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            const SizedBox(height: 4),
-
-            // Nombre cocina
-            Text(
-              kitchenName,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: Colors.grey,
-              ),
-            ),
-
-            const SizedBox(height: 16),
-
-            // Precio
-            Text(
-              '\$${price.toStringAsFixed(0)}',
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-
-            const SizedBox(height: 16),
-
-            // Descripción
-            if (description != null && description!.isNotEmpty) ...[
-              Text(
-                'Descripción',
-                style: theme.textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w600,
+                      const SizedBox(height: 8),
+                      
+                      // Nombre de la cocina (Opcional si lo traes)
+                      const Text("Sazón Caribeño", style: TextStyle(color: Colors.grey)),
+                      
+                      const SizedBox(height: 16),
+                      
+                      // Precio
+                      Text(
+                        "\$${product.precio.toStringAsFixed(0)}",
+                        style: const TextStyle(
+                          fontSize: 22, 
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white // O color primario
+                        ),
+                      ),
+                      
+                      const SizedBox(height: 24),
+                      const Text(
+                        "Descripción",
+                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        product.descripcion,
+                        style: TextStyle(fontSize: 16, color: Colors.grey[400], height: 1.5),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-              const SizedBox(height: 6),
-              Text(
-                description!,
-                style: theme.textTheme.bodyMedium,
-              ),
-            ] else ...[
-              Text(
-                'Descripción',
-                style: theme.textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                'Este producto aún no tiene una descripción detallada.',
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: Colors.grey,
+
+              // 3. Botón Flotante "Agregar al carrito"
+              Positioned(
+                bottom: 24,
+                left: 24,
+                right: 24,
+                child: SizedBox(
+                  width: double.infinity,
+                  height: 55,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.orange, // Tu color naranja
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+                    ),
+                    onPressed: () {
+                      // --- LÓGICA DEL CARRITO ---
+                      Provider.of<CartProvider>(context, listen: false).addToCart(product);
+                      
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text("${product.nombre} agregado al carrito 🛒"),
+                          backgroundColor: Colors.green,
+                          duration: const Duration(seconds: 1),
+                        ),
+                      );
+                      Navigator.pop(context); // Volver al menú
+                    },
+                    child: const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.shopping_cart_outlined, color: Colors.white),
+                        SizedBox(width: 10),
+                        Text(
+                          "Agregar al carrito",
+                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
               ),
             ],
-
-            const SizedBox(height: 32),
-
-            // Botón: agregar al carrito usando CartProvider
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: () {
-                  final cart = context.read<CartProvider>();
-
-                  // ID simple para pruebas si no tienes id real aún
-                  final int id = productId ?? productName.hashCode;
-
-                  cart.addItem(
-                    id: id,
-                    name: productName,
-                    price: price,
-                    imageUrl: imageUrl,
-                    kitchenName: kitchenName,
-                  );
-
-                  ScaffoldMessenger.of(context)
-                    ..hideCurrentSnackBar()
-                    ..showSnackBar(
-                      const SnackBar(
-                        content: Text('Producto agregado al carrito 🛒'),
-                        duration: Duration(seconds: 1),
-                      ),
-                    );
-                },
-                icon: const Icon(Icons.add_shopping_cart_outlined),
-                label: const Text('Agregar al carrito'),
-              ),
-            ),
-          ],
-        ),
+          );
+        },
       ),
     );
   }

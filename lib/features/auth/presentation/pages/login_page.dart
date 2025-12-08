@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
-import 'register_page.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:ghost_kitchens_app/features/shell/presentation/pages/main_shell_page.dart';
+import 'package:ghost_kitchens_app/core/network/api_client.dart';
+import 'package:ghost_kitchens_app/features/auth/data/datasource/auth_remote_datasource.dart';
+import 'register_page.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -11,12 +14,22 @@ class LoginPage extends StatefulWidget {
 
 class _LoginPageState extends State<LoginPage> {
   final _formKey = GlobalKey<FormState>();
-
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
 
+  // Instancia del datasource
+  late AuthRemoteDataSourceImpl _authDataSource;
+
   bool _isLoading = false;
   bool _obscurePassword = true;
+
+  @override
+  void initState() {
+    super.initState();
+    // Inicializamos las dependencias manualmente
+    final apiClient = ApiClient();
+    _authDataSource = AuthRemoteDataSourceImpl(apiClient);
+  }
 
   @override
   void dispose() {
@@ -25,45 +38,58 @@ class _LoginPageState extends State<LoginPage> {
     super.dispose();
   }
 
-Future<void> _onLoginPressed() async {
-  if (!_formKey.currentState!.validate()) return;
+  Future<void> _onLoginPressed() async {
+    if (!_formKey.currentState!.validate()) return;
 
-  setState(() => _isLoading = true);
+    // Ocultar teclado
+    FocusScope.of(context).unfocus();
 
-  // Simula un delay como si fuera una llamada a la API
-  await Future.delayed(const Duration(seconds: 1));
+    setState(() => _isLoading = true);
 
-  final email = _emailController.text.trim();
-  final password = _passwordController.text.trim();
-
-  setState(() => _isLoading = false);
-
-  // --- LOGIN TEMPORAL DE PRUEBA ---
-  if (email == "ejemplo@gmail.com" && password == "12345678") {
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Bienvenido 👌 Login temporal exitoso')),
+    try {
+      // 1. Llamada al Backend
+      final responseDto = await _authDataSource.login(
+        email: _emailController.text.trim(),
+        password: _passwordController.text.trim(),
       );
 
-      // NAVEGAR AL HOME / MAIN SHELL
+      // 2. Guardar Token en el dispositivo
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('token', responseDto.accessToken);
+
+      if (!mounted) return;
+
+      // 3. Navegar al Home
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('¡Bienvenido! Sesión iniciada 🚀')),
+      );
+
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(builder: (_) => const MainShellPage()),
       );
+
+    } catch (e) {
+      // Manejo de errores
+      if (!mounted) return;
+
+      String mensajeError = 'Error al iniciar sesión';
+      // Si el error viene de Dio, intentamos mostrar algo más claro
+      if (e.toString().contains('401')) {
+        mensajeError = 'Correo o contraseña incorrectos';
+      } else if (e.toString().contains('Connection refused')) {
+        mensajeError = 'No se pudo conectar al servidor. Revisa Docker.';
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(mensajeError),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
-    return;
   }
-
-  // Si las credenciales no coinciden
-  if (mounted) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Credenciales incorrectas'),
-        backgroundColor: Colors.redAccent,
-      ),
-    );
-  }
-}
-
 
   @override
   Widget build(BuildContext context) {
@@ -138,9 +164,6 @@ Future<void> _onLoginPressed() async {
                           if (value == null || value.isEmpty) {
                             return 'Ingresa tu contraseña';
                           }
-                          if (value.length < 6) {
-                            return 'Mínimo 6 caracteres';
-                          }
                           return null;
                         },
                       ),
@@ -152,9 +175,7 @@ Future<void> _onLoginPressed() async {
                 Align(
                   alignment: Alignment.centerRight,
                   child: TextButton(
-                    onPressed: () {
-                      // Aquí luego conectamos con /auth/password/forgot/
-                    },
+                    onPressed: () {},
                     child: const Text('¿Olvidaste tu contraseña?'),
                   ),
                 ),
@@ -166,10 +187,10 @@ Future<void> _onLoginPressed() async {
                     onPressed: _isLoading ? null : _onLoginPressed,
                     child: _isLoading
                         ? const SizedBox(
-                      height: 20,
-                      width: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
+                            height: 20,
+                            width: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
                         : const Text('Iniciar sesión'),
                   ),
                 ),
@@ -190,17 +211,6 @@ Future<void> _onLoginPressed() async {
                       child: const Text('Crear cuenta'),
                     ),
                   ],
-                ),
-
-                const SizedBox(height: 24),
-                Divider(color: Colors.grey.shade800),
-                const SizedBox(height: 8),
-                Text(
-                  'Al continuar aceptas nuestros Términos y la Política de Tratamiento de Datos.',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: Colors.grey,
-                  ),
-                  textAlign: TextAlign.center,
                 ),
               ],
             ),

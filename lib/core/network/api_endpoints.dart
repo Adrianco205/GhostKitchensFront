@@ -5,7 +5,7 @@
 class ApiEndpoints {
   // AUTH
   static const String login    = '/auth/login/';
-  static const String register = '/auth/register/';
+  static const String register = '/auth/registro/';
   static const String me       = '/auth/me/';
 
   // USUARIOS (puedes borrar esta si ya no se usa)

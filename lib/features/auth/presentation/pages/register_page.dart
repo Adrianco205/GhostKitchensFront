@@ -1,7 +1,8 @@
-// lib/features/auth/presentation/pages/register_page.dart
-
 import 'package:flutter/material.dart';
-import 'package:ghost_kitchens_app/features/support/presentation/pages/legal.dart';
+import 'package:dio/dio.dart'; // Importar Dio para capturar DioException
+import 'package:ghost_kitchens_app/core/network/api_client.dart';
+import 'package:ghost_kitchens_app/features/auth/data/datasource/auth_remote_datasource.dart';
+import 'package:ghost_kitchens_app/features/auth/data/models/usuario_dto.dart';
 
 class RegisterPage extends StatefulWidget {
   const RegisterPage({super.key});
@@ -13,17 +14,25 @@ class RegisterPage extends StatefulWidget {
 class _RegisterPageState extends State<RegisterPage> {
   final _formKey = GlobalKey<FormState>();
 
+  // Controladores de texto
   final _nombreController = TextEditingController();
   final _apellidoController = TextEditingController();
   final _emailController = TextEditingController();
   final _celularController = TextEditingController();
   final _passwordController = TextEditingController();
 
-  bool _aceptaTerminos = false;
-  bool _aceptaPolitica = false;
-
   bool _isLoading = false;
   bool _obscurePassword = true;
+
+  // Instancia del DataSource
+  late AuthRemoteDataSourceImpl _authDataSource;
+
+  @override
+  void initState() {
+    super.initState();
+    final apiClient = ApiClient();
+    _authDataSource = AuthRemoteDataSourceImpl(apiClient);
+  }
 
   @override
   void dispose() {
@@ -38,318 +47,137 @@ class _RegisterPageState extends State<RegisterPage> {
   Future<void> _onRegisterPressed() async {
     if (!_formKey.currentState!.validate()) return;
 
-    if (!_aceptaTerminos || !_aceptaPolitica) {
+    setState(() => _isLoading = true);
+    FocusScope.of(context).unfocus();
+
+    try {
+      // 1. Crear el DTO con los datos del formulario
+      final registroDto = UsuarioRegisterDto(
+        nombre: _nombreController.text.trim(),
+        apellido: _apellidoController.text.trim(),
+        email: _emailController.text.trim(),
+        celular: _celularController.text.trim(),
+        password: _passwordController.text.trim(),
+      );
+
+      // 2. Llamar al backend
+      await _authDataSource.register(registroDto);
+
+      if (!mounted) return;
+
+      // 3. Éxito: Mostrar mensaje y volver al Login
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text(
-            'Debes aceptar los Términos y Condiciones y la Política de Tratamiento de Datos para continuar.',
-          ),
+          content: Text('¡Cuenta creada con éxito! Inicia sesión.'),
+          backgroundColor: Colors.green,
         ),
       );
-      return;
-    }
 
-    setState(() => _isLoading = true);
+      Navigator.pop(context); // Vuelve atrás (al Login)
 
-    // Aquí luego conectamos con /auth/register/
-    await Future.delayed(const Duration(seconds: 1));
+    } catch (e) {
+      if (!mounted) return;
 
-    setState(() => _isLoading = false);
+      String errorMessage = 'Error al registrar usuario';
 
-    if (mounted) {
+      // --- AQUÍ ESTABA TU ERROR DE NULL SAFETY ---
+      // Lo corregimos usando 'Try cast' y '??'
+      if (e is DioException) {
+        if (e.response != null && e.response?.data != null) {
+          // Intentamos sacar el mensaje exacto del backend (ej: "Email ya existe")
+          final detail = e.response?.data['detail'];
+          errorMessage = detail?.toString() ?? 'Error desconocido en el servidor';
+        } else {
+          errorMessage = 'Error de conexión con el servidor';
+        }
+      }
+
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Registro simulado. Falta OTP 😊')),
+        SnackBar(
+          content: Text(errorMessage),
+          backgroundColor: Colors.red,
+        ),
       );
-
-      Navigator.of(context).pop(); // Volver al login
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
-  }
-
-  Future<void> _showLegalBottomSheet({
-    required String title,
-    required String content,
-  }) async {
-    final theme = Theme.of(context);
-
-    await showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
-      ),
-      builder: (ctx) {
-        return SafeArea(
-          child: DraggableScrollableSheet(
-            expand: false,
-            initialChildSize: 0.8,
-            minChildSize: 0.4,
-            maxChildSize: 0.95,
-            builder: (context, scrollController) {
-              return Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Handle
-                    Center(
-                      child: Container(
-                        width: 40,
-                        height: 4,
-                        margin: const EdgeInsets.only(bottom: 12),
-                        decoration: BoxDecoration(
-                          color: Colors.grey.shade400,
-                          borderRadius: BorderRadius.circular(2),
-                        ),
-                      ),
-                    ),
-                    Text(
-                      title,
-                      style: theme.textTheme.titleMedium
-                          ?.copyWith(fontWeight: FontWeight.w700),
-                    ),
-                    const SizedBox(height: 8),
-                    Expanded(
-                      child: SingleChildScrollView(
-                        controller: scrollController,
-                        child: SelectableText(
-                          content,
-                          style: theme.textTheme.bodySmall,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        onPressed: () => Navigator.of(context).pop(),
-                        child: const Text('Cerrar'),
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            },
-          ),
-        );
-      },
-    );
-  }
-
-  void _openTerms() {
-    _showLegalBottomSheet(
-      title: 'Términos y Condiciones',
-      content: kTermsOfServiceText,
-    );
-  }
-
-  void _openPrivacy() {
-    _showLegalBottomSheet(
-      title: 'Política de Tratamiento de Datos',
-      content: kPrivacyPolicyText,
-    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final linkStyle = theme.textTheme.bodySmall?.copyWith(
-      color: theme.colorScheme.primary,
-      decoration: TextDecoration.underline,
-    );
-
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Crear cuenta'),
-      ),
+      appBar: AppBar(title: const Text("Crear cuenta")),
       body: SafeArea(
-        child: Padding(
+        child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
-          child: SingleChildScrollView(
-            child: Form(
-              key: _formKey,
-              child: Column(
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextFormField(
-                          controller: _nombreController,
-                          decoration: const InputDecoration(
-                            labelText: 'Nombre',
-                          ),
-                          validator: (value) =>
-                              value == null || value.trim().isEmpty
-                                  ? 'Ingresa tu nombre'
-                                  : null,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: TextFormField(
-                          controller: _apellidoController,
-                          decoration: const InputDecoration(
-                            labelText: 'Apellido',
-                          ),
-                          validator: (value) =>
-                              value == null || value.trim().isEmpty
-                                  ? 'Ingresa tu apellido'
-                                  : null,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    controller: _emailController,
-                    keyboardType: TextInputType.emailAddress,
-                    decoration: const InputDecoration(
-                      labelText: 'Correo electrónico',
-                      prefixIcon: Icon(Icons.email_outlined),
-                    ),
-                    validator: (value) {
-                      if (value == null || value.trim().isEmpty) {
-                        return 'Ingresa tu correo';
-                      }
-                      if (!value.contains('@')) {
-                        return 'Correo no válido';
-                      }
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    controller: _celularController,
-                    keyboardType: TextInputType.phone,
-                    decoration: const InputDecoration(
-                      labelText: 'Celular',
-                      prefixIcon: Icon(Icons.phone_outlined),
-                    ),
-                    validator: (value) {
-                      if (value == null || value.trim().isEmpty) {
-                        return 'Ingresa tu número de celular';
-                      }
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    controller: _passwordController,
-                    obscureText: _obscurePassword,
-                    decoration: InputDecoration(
-                      labelText: 'Contraseña',
-                      prefixIcon: const Icon(Icons.lock_outline),
-                      suffixIcon: IconButton(
-                        icon: Icon(
-                          _obscurePassword
-                              ? Icons.visibility_off
-                              : Icons.visibility,
-                        ),
-                        onPressed: () {
-                          setState(() {
-                            _obscurePassword = !_obscurePassword;
-                          });
-                        },
+          child: Form(
+            key: _formKey,
+            child: Column(
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextFormField(
+                        controller: _nombreController,
+                        decoration: const InputDecoration(labelText: 'Nombre'),
+                        validator: (v) => v!.isEmpty ? 'Requerido' : null,
                       ),
                     ),
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return 'Crea una contraseña';
-                      }
-                      if (value.length < 6) {
-                        return 'Mínimo 6 caracteres';
-                      }
-                      return null;
-                    },
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: TextFormField(
+                        controller: _apellidoController,
+                        decoration: const InputDecoration(labelText: 'Apellido'),
+                        validator: (v) => v!.isEmpty ? 'Requerido' : null,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _emailController,
+                  keyboardType: TextInputType.emailAddress,
+                  decoration: const InputDecoration(
+                    labelText: 'Correo electrónico',
+                    prefixIcon: Icon(Icons.email_outlined),
                   ),
-                  const SizedBox(height: 20),
-
-                  // ---------- CHECKBOX TÉRMINOS ----------
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Checkbox(
-                        value: _aceptaTerminos,
-                        onChanged: (value) {
-                          setState(() => _aceptaTerminos = value ?? false);
-                        },
-                      ),
-                      Expanded(
-                        child: Wrap(
-                          children: [
-                            Text(
-                              'He leído y acepto los ',
-                              style: theme.textTheme.bodySmall,
-                            ),
-                            GestureDetector(
-                              onTap: _openTerms,
-                              child: Text(
-                                'Términos y Condiciones',
-                                style: linkStyle,
-                              ),
-                            ),
-                            Text(
-                              ' de uso de la aplicación.',
-                              style: theme.textTheme.bodySmall,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
+                  validator: (v) => !v!.contains('@') ? 'Correo inválido' : null,
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _celularController,
+                  keyboardType: TextInputType.phone,
+                  decoration: const InputDecoration(
+                    labelText: 'Celular',
+                    prefixIcon: Icon(Icons.phone_android),
                   ),
-
-                  // ---------- CHECKBOX POLÍTICA ----------
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Checkbox(
-                        value: _aceptaPolitica,
-                        onChanged: (value) {
-                          setState(() => _aceptaPolitica = value ?? false);
-                        },
-                      ),
-                      Expanded(
-                        child: Wrap(
-                          children: [
-                            Text(
-                              'He leído y acepto la ',
-                              style: theme.textTheme.bodySmall,
-                            ),
-                            GestureDetector(
-                              onTap: _openPrivacy,
-                              child: Text(
-                                'Política de Tratamiento de Datos Personales',
-                                style: linkStyle,
-                              ),
-                            ),
-                            Text(
-                              '.',
-                              style: theme.textTheme.bodySmall,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-
-                  const SizedBox(height: 24),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: _isLoading ? null : _onRegisterPressed,
-                      child: _isLoading
-                          ? const SizedBox(
-                              height: 20,
-                              width: 20,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                              ),
-                            )
-                          : const Text('Crear cuenta'),
+                  validator: (v) => v!.length < 7 ? 'Número inválido' : null,
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _passwordController,
+                  obscureText: _obscurePassword,
+                  decoration: InputDecoration(
+                    labelText: 'Contraseña',
+                    prefixIcon: const Icon(Icons.lock_outline),
+                    suffixIcon: IconButton(
+                      icon: Icon(_obscurePassword ? Icons.visibility_off : Icons.visibility),
+                      onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
                     ),
                   ),
-                ],
-              ),
+                  validator: (v) => v!.length < 4 ? 'Mínimo 4 caracteres' : null,
+                ),
+                const SizedBox(height: 32),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: _isLoading ? null : _onRegisterPressed,
+                    child: _isLoading
+                        ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator())
+                        : const Text('Crear cuenta'),
+                  ),
+                ),
+              ],
             ),
           ),
         ),

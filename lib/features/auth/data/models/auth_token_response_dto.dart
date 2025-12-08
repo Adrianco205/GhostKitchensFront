@@ -1,31 +1,32 @@
-// lib/features/auth/data/models/auth_token_response_dto.dart
+// Si tu entidad AuthSession requiere usuario, tendrás que ajustarla
+// o hacer una segunda llamada para traer el usuario.
+// Por ahora, adaptamos este DTO a lo que REALMENTE devuelve el servidor.
+
 import 'package:ghost_kitchens_app/features/auth/domain/entities/auth_session.dart';
-import 'package:ghost_kitchens_app/features/auth/data/models/usuario_dto.dart';
+
+// ... imports
 
 class AuthTokenResponseDto {
-  final String access;
-  final String refresh;
-  final UsuarioDto usuario;
+  final String accessToken;
+  final String tokenType;
 
   const AuthTokenResponseDto({
-    required this.access,
-    required this.refresh,
-    required this.usuario,
+    required this.accessToken,
+    required this.tokenType,
   });
 
   factory AuthTokenResponseDto.fromJson(Map<String, dynamic> json) {
     return AuthTokenResponseDto(
-      access: json['access'] as String,
-      refresh: json['refresh'] as String,
-      usuario: UsuarioDto.fromJson(json['usuario'] as Map<String, dynamic>),
+      accessToken: json['access_token'] ?? '',
+      tokenType: json['token_type'] ?? 'bearer',
     );
   }
 
   AuthSession toEntity() {
     return AuthSession(
-      accessToken: access,
-      refreshToken: refresh,
-      usuario: usuario.toEntity(),
+      accessToken: accessToken,
+      refreshToken: '', // Backend Python no usa refresh token aún
+      usuario: null,    // <--- Ahora podemos enviar null y Flutter no se queja
     );
   }
 }

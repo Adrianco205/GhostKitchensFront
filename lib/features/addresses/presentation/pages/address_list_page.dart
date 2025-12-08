@@ -1,21 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:ghost_kitchens_app/core/network/api_client.dart';
+import 'package:ghost_kitchens_app/features/addresses/data/datasource/address_remote_datasource.dart';
+import 'package:ghost_kitchens_app/features/addresses/data/models/address_dto.dart';
 import 'package:ghost_kitchens_app/features/addresses/presentation/pages/address_form_page.dart';
-
-/// Modelo interno para manejar la lista en esta pantalla.
-/// Más adelante puedes reemplazarlo por tu AddressDto real.
-class AddressItem {
-  int id;
-  String alias;
-  String direccionTexto;
-  String? ciudad;
-
-  AddressItem({
-    required this.id,
-    required this.alias,
-    required this.direccionTexto,
-    this.ciudad,
-  });
-}
 
 class AddressListPage extends StatefulWidget {
   const AddressListPage({super.key});
@@ -25,177 +12,140 @@ class AddressListPage extends StatefulWidget {
 }
 
 class _AddressListPageState extends State<AddressListPage> {
-  /// Datos mock iniciales. Luego esto vendrá del backend.
-  final List<AddressItem> _addresses = [
-    AddressItem(
-      id: 1,
-      alias: 'casa',
-      direccionTexto: 'San jose',
-      ciudad: 'cartagena',
-    ),
-    AddressItem(
-      id: 2,
-      alias: 'trabajo',
-      direccionTexto: 'pepe',
-      ciudad: 'monteria',
-    ),
-    AddressItem(
-      id: 3,
-      alias: 'jaja',
-      direccionTexto: 'jaja',
-      ciudad: 'jaja',
-    ),
-  ];
+  late AddressRemoteDataSource _dataSource;
+  late Future<List<AddressDto>> _addressesFuture;
 
-  int _nextId = 4;
-
-  Future<void> _onAddAddress() async {
-    final result = await Navigator.of(context).push<AddressFormResult>(
-      MaterialPageRoute(
-        builder: (_) => const AddressFormPage(),
-      ),
-    );
-
-    if (result == null) return;
-
-    setState(() {
-      _addresses.add(
-        AddressItem(
-          id: _nextId++,
-          alias: result.alias,
-          direccionTexto: result.direccionTexto,
-          ciudad: result.ciudad,
-        ),
-      );
-    });
-
-    // Aquí luego puedes llamar al backend para guardar la nueva dirección.
+  @override
+  void initState() {
+    super.initState();
+    _dataSource = AddressRemoteDataSource(ApiClient());
+    _loadData();
   }
 
-  Future<void> _onEditAddress(AddressItem item) async {
-    final initial = AddressFormResult(
-      id: item.id,
-      alias: item.alias,
-      direccionTexto: item.direccionTexto,
-      ciudad: item.ciudad,
-    );
-
-    final result = await Navigator.of(context).push<AddressFormResult>(
-      MaterialPageRoute(
-        builder: (_) => AddressFormPage(initialAddress: initial),
-      ),
-    );
-
-    if (result == null) return;
-
+  void _loadData() {
     setState(() {
-      final index = _addresses.indexWhere((a) => a.id == item.id);
-      if (index != -1) {
-        _addresses[index] = AddressItem(
-          id: item.id,
-          alias: result.alias,
-          direccionTexto: result.direccionTexto,
-          ciudad: result.ciudad,
-        );
-      }
+      _addressesFuture = _dataSource.getAddresses();
     });
-
-    // Aquí luego actualizas en backend.
-  }
-
-  void _onDeleteAddress(AddressItem item) {
-    showDialog(
-      context: context,
-      builder: (ctx) {
-        return AlertDialog(
-          title: const Text('Eliminar dirección'),
-          content: const Text(
-              '¿Seguro que quieres eliminar esta dirección de tu lista?'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(ctx).pop(),
-              child: const Text('Cancelar'),
-            ),
-            TextButton(
-              onPressed: () {
-                Navigator.of(ctx).pop();
-                setState(() {
-                  _addresses.removeWhere((a) => a.id == item.id);
-                });
-                // Aquí luego llamas al backend para eliminarla.
-              },
-              child: const Text(
-                'Eliminar',
-                style: TextStyle(color: Colors.redAccent),
-              ),
-            ),
-          ],
-        );
-      },
-    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Mis direcciones'),
-      ),
-      body: SafeArea(
-        child: _addresses.isEmpty
-            ? Center(
-                child: Text(
-                  'Aún no tienes direcciones guardadas.\nAgrega una nueva para empezar.',
-                  textAlign: TextAlign.center,
-                  style: theme.textTheme.bodyMedium
-                      ?.copyWith(color: Colors.grey),
-                ),
-              )
-            : ListView.separated(
-                padding: const EdgeInsets.all(16),
-                itemCount: _addresses.length,
-                separatorBuilder: (_, __) => const Divider(height: 16),
-                itemBuilder: (context, index) {
-                  final addr = _addresses[index];
-                  return ListTile(
-                    leading: Icon(
-                      Icons.location_on_rounded,
-                      color: theme.colorScheme.primary,
-                    ),
-                    title: Text(
-                      addr.alias.isNotEmpty
-                          ? '${addr.alias} · ${addr.direccionTexto}'
-                          : addr.direccionTexto,
-                    ),
-                    subtitle: addr.ciudad != null
-                        ? Text(addr.ciudad!)
-                        : null,
-                    onTap: () => _onEditAddress(addr),
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        IconButton(
-                          tooltip: 'Editar',
-                          icon: const Icon(Icons.edit_outlined),
-                          onPressed: () => _onEditAddress(addr),
-                        ),
-                        IconButton(
-                          tooltip: 'Eliminar',
-                          icon: const Icon(Icons.delete_outline),
-                          onPressed: () => _onDeleteAddress(addr),
-                        ),
-                      ],
-                    ),
-                  );
-                },
-              ),
-      ),
+      appBar: AppBar(title: const Text("Mis Direcciones")),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: _onAddAddress,
-        icon: const Icon(Icons.add_location_alt_outlined),
-        label: const Text('Nueva dirección'),
+        backgroundColor: Colors.orange,
+        icon: const Icon(Icons.add_location_alt, color: Colors.white),
+        label: const Text("Nueva Dirección", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        onPressed: () async {
+          // Si retorna true, recargamos la lista
+          final result = await Navigator.push(
+            context, 
+            MaterialPageRoute(builder: (_) => const AddressFormPage())
+          );
+          if (result == true) {
+            _loadData();
+          }
+        },
+      ),
+      body: FutureBuilder<List<AddressDto>>(
+        future: _addressesFuture,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (snapshot.hasError) {
+            return Center(child: Text("Error: ${snapshot.error}"));
+          }
+          
+          final list = snapshot.data!;
+          if (list.isEmpty) {
+            return const Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.location_off, size: 60, color: Colors.grey),
+                  SizedBox(height: 16),
+                  Text("No tienes direcciones guardadas", style: TextStyle(color: Colors.grey)),
+                ],
+              ),
+            );
+          }
+
+          return ListView.separated(
+            padding: const EdgeInsets.all(16),
+            itemCount: list.length,
+            separatorBuilder: (_, __) => const Divider(color: Colors.grey),
+            itemBuilder: (context, index) {
+              final addr = list[index];
+              
+              return ListTile(
+                leading: const Icon(Icons.place, color: Colors.orange),
+                title: Text(
+                  addr.direccionExacta,
+                  style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)
+                ),
+                subtitle: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      "${addr.barrio}, ${addr.municipio}",
+                      style: const TextStyle(color: Colors.grey)
+                    ),
+                    if (addr.apartamentoCasa != null && addr.apartamentoCasa!.isNotEmpty)
+                      Text(
+                        "Interior/Apto: ${addr.apartamentoCasa}",
+                        style: TextStyle(color: Colors.orange[300], fontSize: 12)
+                      ),
+                  ],
+                ),
+                // Botones de acción (Editar / Borrar)
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // EDITAR
+                    IconButton(
+                      icon: const Icon(Icons.edit, color: Colors.orangeAccent),
+                      onPressed: () async {
+                        final result = await Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => AddressFormPage(addressToEdit: addr),
+                          ),
+                        );
+                        if (result == true) {
+                          _loadData();
+                        }
+                      },
+                    ),
+                    // BORRAR
+                    IconButton(
+                      icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
+                      onPressed: () async {
+                        final confirm = await showDialog<bool>(
+                          context: context,
+                          builder: (ctx) => AlertDialog(
+                            backgroundColor: const Color(0xFF1E2029),
+                            title: const Text("¿Eliminar?", style: TextStyle(color: Colors.white)),
+                            content: const Text("Esta acción no se puede deshacer.", style: TextStyle(color: Colors.grey)),
+                            actions: [
+                              TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("Cancelar")),
+                              TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text("Eliminar", style: TextStyle(color: Colors.red))),
+                            ],
+                          ),
+                        );
+
+                        if (confirm == true && addr.id != null) {
+                          await _dataSource.deleteAddress(addr.id!);
+                          _loadData();
+                        }
+                      },
+                    ),
+                  ],
+                ),
+              );
+            },
+          );
+        },
       ),
     );
   }

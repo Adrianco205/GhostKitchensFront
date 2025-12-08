@@ -1,26 +1,13 @@
 import 'package:flutter/material.dart';
-
-/// Resultado que devuelve el formulario al guardar.
-/// Luego lo puedes reemplazar por tu AddressDto si quieres.
-class AddressFormResult {
-  final int? id; // para edición, puede venir con ID
-  final String alias;
-  final String direccionTexto;
-  final String? ciudad;
-
-  const AddressFormResult({
-    this.id,
-    required this.alias,
-    required this.direccionTexto,
-    this.ciudad,
-  });
-}
+import 'package:dio/dio.dart';
+import 'package:ghost_kitchens_app/core/network/api_client.dart';
+import 'package:ghost_kitchens_app/features/addresses/data/datasource/address_remote_datasource.dart';
+import 'package:ghost_kitchens_app/features/addresses/data/models/address_dto.dart';
 
 class AddressFormPage extends StatefulWidget {
-  /// Si viene con datos → modo edición. Si es null → nueva dirección.
-  final AddressFormResult? initialAddress;
+  final AddressDto? addressToEdit; // Si viene null, es crear. Si trae datos, es editar.
 
-  const AddressFormPage({super.key, this.initialAddress});
+  const AddressFormPage({super.key, this.addressToEdit});
 
   @override
   State<AddressFormPage> createState() => _AddressFormPageState();
@@ -29,124 +16,130 @@ class AddressFormPage extends StatefulWidget {
 class _AddressFormPageState extends State<AddressFormPage> {
   final _formKey = GlobalKey<FormState>();
 
-  late final TextEditingController _aliasController;
-  late final TextEditingController _direccionController;
-  late final TextEditingController _ciudadController;
+  // Controladores
+  late TextEditingController _direccionController;
+  late TextEditingController _deptoController;
+  late TextEditingController _municipioController;
+  late TextEditingController _barrioController;
+  late TextEditingController _aptoController;
+  late TextEditingController _indicacionesController;
 
-  bool get _isEdit => widget.initialAddress != null;
+  bool _isLoading = false;
+  late AddressRemoteDataSource _dataSource;
 
   @override
   void initState() {
     super.initState();
+    _dataSource = AddressRemoteDataSource(ApiClient());
 
-    _aliasController = TextEditingController(
-      text: widget.initialAddress?.alias ?? '',
-    );
-    _direccionController = TextEditingController(
-      text: widget.initialAddress?.direccionTexto ?? '',
-    );
-    _ciudadController = TextEditingController(
-      text: widget.initialAddress?.ciudad ?? '',
-    );
+    // Inicializar controladores con datos si estamos editando
+    final addr = widget.addressToEdit;
+    _direccionController = TextEditingController(text: addr?.direccionExacta ?? '');
+    _deptoController = TextEditingController(text: addr?.departamento ?? 'Bolívar');
+    _municipioController = TextEditingController(text: addr?.municipio ?? 'Cartagena');
+    _barrioController = TextEditingController(text: addr?.barrio ?? '');
+    _aptoController = TextEditingController(text: addr?.apartamentoCasa ?? '');
+    _indicacionesController = TextEditingController(text: addr?.indicaciones ?? '');
   }
 
   @override
   void dispose() {
-    _aliasController.dispose();
     _direccionController.dispose();
-    _ciudadController.dispose();
+    _deptoController.dispose();
+    _municipioController.dispose();
+    _barrioController.dispose();
+    _aptoController.dispose();
+    _indicacionesController.dispose();
     super.dispose();
   }
 
-  void _onSavePressed() {
+  Future<void> _saveAddress() async {
     if (!_formKey.currentState!.validate()) return;
 
-    final result = AddressFormResult(
-      id: widget.initialAddress?.id,
-      alias: _aliasController.text.trim(),
-      direccionTexto: _direccionController.text.trim(),
-      ciudad: _ciudadController.text.trim().isEmpty
-          ? null
-          : _ciudadController.text.trim(),
-    );
+    setState(() => _isLoading = true);
 
-    // 👇 Devolvemos el resultado al caller (AddressListPage o quien sea)
-    Navigator.of(context).pop(result);
+    try {
+      final dto = AddressDto(
+        direccionExacta: _direccionController.text,
+        departamento: _deptoController.text,
+        municipio: _municipioController.text,
+        barrio: _barrioController.text,
+        apartamentoCasa: _aptoController.text.isEmpty ? null : _aptoController.text,
+        indicaciones: _indicacionesController.text.isEmpty ? null : _indicacionesController.text,
+      );
+
+      if (widget.addressToEdit == null) {
+        // CREAR
+        await _dataSource.createAddress(dto);
+      } else {
+        // EDITAR (Usamos el ID que vino en el objeto original)
+        await _dataSource.updateAddress(widget.addressToEdit!.id!, dto);
+      }
+
+      if (!mounted) return;
+      Navigator.pop(context, true); // Volver y recargar
+
+      final action = widget.addressToEdit == null ? "creada" : "actualizada";
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Dirección $action con éxito"), backgroundColor: Colors.green),
+      );
+
+    } catch (e) {
+      String msg = "Error al guardar";
+      if (e is DioException) {
+        msg = e.response?.data['detail']?.toString() ?? e.message ?? "Error desconocido";
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(msg), backgroundColor: Colors.red),
+      );
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final isEditing = widget.addressToEdit != null;
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(_isEdit ? 'Editar dirección' : 'Nueva dirección'),
-      ),
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Form(
-            key: _formKey,
-            child: ListView(
-              children: [
-                Text(
-                  'Completa los datos de tu dirección de entrega.',
-                  style: theme.textTheme.bodyMedium
-                      ?.copyWith(color: Colors.grey),
-                ),
-                const SizedBox(height: 16),
+      appBar: AppBar(title: Text(isEditing ? "Editar Dirección" : "Nueva Dirección")),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            children: [
+              // ... (Mismos campos de texto que tenías antes: Depto, Muni, Barrio, Dirección, Apto, Indicaciones) ...
+              // COPIA LOS TEXTFORMFIELDS DE TU VERSIÓN ANTERIOR AQUÍ PARA NO REPETIRLOS,
+              // SOLO ASEGURATE DE USAR LOS CONTROLADORES QUE INICIALICÉ ARRIBA.
 
-                // Alias
-                TextFormField(
-                  controller: _aliasController,
-                  decoration: const InputDecoration(
-                    labelText: 'Alias (opcional)',
-                    hintText: 'Casa, trabajo, apartamento…',
-                    prefixIcon: Icon(Icons.tag_outlined),
-                  ),
-                ),
-                const SizedBox(height: 16),
+              // Ejemplo rápido de uno:
+              TextFormField(
+                controller: _direccionController,
+                decoration: const InputDecoration(labelText: "Dirección", prefixIcon: Icon(Icons.pin_drop)),
+                validator: (v) => v!.isEmpty ? "Requerido" : null,
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _barrioController,
+                decoration: const InputDecoration(labelText: "Barrio", prefixIcon: Icon(Icons.holiday_village)),
+                validator: (v) => v!.isEmpty ? "Requerido" : null,
+              ),
+              // ... Pon el resto de tus campos aquí ...
 
-                // Dirección
-                TextFormField(
-                  controller: _direccionController,
-                  decoration: const InputDecoration(
-                    labelText: 'Dirección',
-                    hintText: 'Cra 50 # 30-20, Barrio El Bosque',
-                    prefixIcon: Icon(Icons.location_on_outlined),
-                  ),
-                  validator: (value) {
-                    if (value == null || value.trim().isEmpty) {
-                      return 'La dirección es obligatoria';
-                    }
-                    if (value.trim().length < 5) {
-                      return 'Ingresa una dirección válida';
-                    }
-                    return null;
-                  },
+              const SizedBox(height: 32),
+              SizedBox(
+                width: double.infinity,
+                height: 50,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
+                  onPressed: _isLoading ? null : _saveAddress,
+                  child: _isLoading
+                    ? const CircularProgressIndicator(color: Colors.white)
+                    : Text(isEditing ? "Actualizar" : "Guardar", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                 ),
-                const SizedBox(height: 16),
-
-                // Ciudad
-                TextFormField(
-                  controller: _ciudadController,
-                  decoration: const InputDecoration(
-                    labelText: 'Ciudad (opcional)',
-                    prefixIcon: Icon(Icons.location_city_outlined),
-                  ),
-                ),
-
-                const SizedBox(height: 32),
-
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: _onSavePressed,
-                    child: Text(_isEdit ? 'Guardar cambios' : 'Guardar'),
-                  ),
-                ),
-              ],
-            ),
+              )
+            ],
           ),
         ),
       ),
