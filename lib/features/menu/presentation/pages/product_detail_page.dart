@@ -32,7 +32,10 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.white, shadows: [Shadow(color: Colors.black, blurRadius: 10)]),
+        iconTheme: const IconThemeData(
+          color: Colors.white,
+          shadows: [Shadow(color: Colors.black, blurRadius: 10)]
+        ),
       ),
       body: FutureBuilder<ProductDto>(
         future: _productFuture,
@@ -43,10 +46,19 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
           if (snapshot.hasError) {
             return const Center(child: Text("Error al cargar producto"));
           }
-          
+
           final product = snapshot.data!;
-          // Placeholder de imagen (cuando tengas reales en BD, usa product.imagenUrl)
-          final imageUrl = 'https://source.unsplash.com/800x600/?food,${product.nombre.replaceAll(" ", "")}';
+
+          // --- LÓGICA DE IMAGEN CORREGIDA ---
+          String imageUrlToShow;
+
+          // 1. Verificamos si el producto trae imagenUrl desde la BD
+          if (product.imagenUrl != null && product.imagenUrl!.isNotEmpty) {
+            imageUrlToShow = product.imagenUrl!;
+          } else {
+            // 2. Si es null o vacía, usamos el placeholder de Unsplash
+            imageUrlToShow = 'https://source.unsplash.com/800x600/?food,${product.nombre.replaceAll(" ", "")}';
+          }
 
           return Stack(
             children: [
@@ -57,9 +69,12 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                 right: 0,
                 height: 350,
                 child: Image.network(
-                  imageUrl,
+                  imageUrlToShow, // <--- Usamos la variable calculada
                   fit: BoxFit.cover,
-                  errorBuilder: (_,__,___) => Container(color: Colors.grey),
+                  errorBuilder: (_,__,___) => Container(
+                    color: Colors.grey[900],
+                    child: const Center(child: Icon(Icons.broken_image, color: Colors.white54, size: 50)),
+                  ),
                 ),
               ),
 
@@ -69,49 +84,54 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                 child: Container(
                   padding: const EdgeInsets.all(24),
                   decoration: const BoxDecoration(
-                    color: Color(0xFF0F111A), // Color de fondo oscuro (ajusta a tu theme)
+                    color: Color(0xFF0F111A), // Fondo oscuro
                     borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
                   ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Título
-                      Text(
-                        product.nombre,
-                        style: const TextStyle(
-                          fontSize: 24, 
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white
+                  child: SingleChildScrollView( // Agregado SingleChildScrollView por seguridad en pantallas pequeñas
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Título
+                        Text(
+                          product.nombre,
+                          style: const TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 8),
-                      
-                      // Nombre de la cocina (Opcional si lo traes)
-                      const Text("Sazón Caribeño", style: TextStyle(color: Colors.grey)),
-                      
-                      const SizedBox(height: 16),
-                      
-                      // Precio
-                      Text(
-                        "\$${product.precio.toStringAsFixed(0)}",
-                        style: const TextStyle(
-                          fontSize: 22, 
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white // O color primario
+                        const SizedBox(height: 8),
+
+                        // Nombre de la cocina (Estático por ahora, o podrías pasarlo en el constructor si lo tienes)
+                        const Text("Ghost Kitchen", style: TextStyle(color: Colors.grey)),
+
+                        const SizedBox(height: 16),
+
+                        // Precio
+                        Text(
+                          "\$${product.precio.toStringAsFixed(0)}",
+                          style: const TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.orange // Color primario (naranja)
+                          ),
                         ),
-                      ),
-                      
-                      const SizedBox(height: 24),
-                      const Text(
-                        "Descripción",
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        product.descripcion,
-                        style: TextStyle(fontSize: 16, color: Colors.grey[400], height: 1.5),
-                      ),
-                    ],
+
+                        const SizedBox(height: 24),
+                        const Text(
+                          "Descripción",
+                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          product.descripcion,
+                          style: TextStyle(fontSize: 16, color: Colors.grey[400], height: 1.5),
+                        ),
+
+                        // Espacio extra al final para que el botón flotante no tape el texto
+                        const SizedBox(height: 100),
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -128,6 +148,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.orange, // Tu color naranja
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+                      elevation: 5,
                     ),
                     onPressed: () {
                       // --- LÓGICA DEL CARRITO ---

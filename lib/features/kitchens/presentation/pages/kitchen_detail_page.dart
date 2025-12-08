@@ -30,7 +30,6 @@ class _KitchenDetailPageState extends State<KitchenDetailPage> {
     final isDark = theme.brightness == Brightness.dark;
 
     return Scaffold(
-      // Usamos un color de fondo ligeramente distinto para que las tarjetas resalten
       backgroundColor: isDark ? const Color(0xFF121212) : Colors.grey[100],
       body: FutureBuilder<KitchenDto>(
         future: _kitchenDetailFuture,
@@ -50,7 +49,7 @@ class _KitchenDetailPageState extends State<KitchenDetailPage> {
 
           return CustomScrollView(
             slivers: [
-              // --- APP BAR ELÁSTICO CON IMAGEN ---
+              // --- APP BAR ELÁSTICO CON IMAGEN DE LA COCINA ---
               SliverAppBar(
                 expandedHeight: 220,
                 pinned: true,
@@ -107,16 +106,25 @@ class _KitchenDetailPageState extends State<KitchenDetailPage> {
                 ),
               ),
 
-              // --- LISTA DE PRODUCTOS CON NUEVO DISEÑO ---
+              // --- LISTA DE PRODUCTOS ---
               SliverList(
                 delegate: SliverChildBuilderDelegate(
                   (context, index) {
                     final producto = productos[index];
+                    print("🔍 DEBUG PRODUCTO: ${producto.nombre}");
+                    print("   -> URL que llegó del JSON: ${producto.imagenUrl}");
 
-                    // NOTA: Como el backend no tiene imágenes de productos,
-                    // usamos un placeholder aleatorio de unsplash basado en el nombre.
-                    // Cuando actualices el backend, cambia esto por `producto.imagenUrl`.
-                    final placeholderImage = 'https://source.unsplash.com/200x200/?food,${producto.nombre.replaceAll(" ", "")}';
+                    // --- LÓGICA DE IMAGEN CORREGIDA ---
+                    // Determinamos qué imagen mostrar para este producto específico
+                    String imageUrlToShow;
+
+                    // Verificamos si imagenUrl existe y NO está vacía
+                    if (producto.imagenUrl != null && producto.imagenUrl!.isNotEmpty) {
+                      imageUrlToShow = producto.imagenUrl!;
+                    } else {
+                      // Si no hay imagen en BD, usamos el placeholder
+                      imageUrlToShow = 'https://source.unsplash.com/200x200/?food,${producto.nombre.replaceAll(" ", "")}';
+                    }
 
                     return Container(
                       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -140,7 +148,7 @@ class _KitchenDetailPageState extends State<KitchenDetailPage> {
                             Navigator.push(
                               context,
                               MaterialPageRoute(
-                                builder: (_) => ProductDetailPage(productId: producto.id), // Asegúrate de importar el archivo
+                                builder: (_) => ProductDetailPage(productId: producto.id),
                               ),
                             );
                           },
@@ -153,7 +161,7 @@ class _KitchenDetailPageState extends State<KitchenDetailPage> {
                                 ClipRRect(
                                   borderRadius: BorderRadius.circular(12),
                                   child: Image.network(
-                                    placeholderImage,
+                                    imageUrlToShow, // <--- Usamos la variable calculada
                                     height: 100,
                                     width: 100,
                                     fit: BoxFit.cover,
@@ -193,7 +201,7 @@ class _KitchenDetailPageState extends State<KitchenDetailPage> {
                                           Text(
                                             "\$${producto.precio.toStringAsFixed(0)}",
                                             style: const TextStyle(
-                                              color: Colors.orange, // Color destacado
+                                              color: Colors.orange,
                                               fontWeight: FontWeight.w800,
                                               fontSize: 16,
                                             ),
@@ -222,8 +230,8 @@ class _KitchenDetailPageState extends State<KitchenDetailPage> {
                   childCount: productos.length,
                 ),
               ),
-              // Espacio extra al final
-              const SliverToBoxAdapter(child: SizedBox(height: 24)),
+              // Espacio extra al final para que no quede cortado en pantallas con notch
+              const SliverToBoxAdapter(child: SizedBox(height: 40)),
             ],
           );
         },
