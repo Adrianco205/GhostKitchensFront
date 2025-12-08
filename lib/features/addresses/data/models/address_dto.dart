@@ -1,5 +1,6 @@
 class AddressDto {
   final int? id;
+  // Campos detallados que espera tu Backend actual
   final String direccionExacta;
   final String departamento;
   final String municipio;
@@ -17,7 +18,7 @@ class AddressDto {
     this.indicaciones,
   });
 
-  // De JSON (Backend snake_case) a Dart (camelCase)
+  // De Backend a Frontend
   factory AddressDto.fromJson(Map<String, dynamic> json) {
     return AddressDto(
       id: json['id'],
@@ -30,7 +31,7 @@ class AddressDto {
     );
   }
 
-  // De Dart (camelCase) a JSON (Backend snake_case)
+  // De Frontend a Backend
   Map<String, dynamic> toJson() {
     return {
       'direccion_exacta': direccionExacta,

@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:dio/dio.dart'; // Importar Dio
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:ghost_kitchens_app/features/shell/presentation/pages/main_shell_page.dart';
 import 'package:ghost_kitchens_app/core/network/api_client.dart';
 import 'package:ghost_kitchens_app/features/auth/data/datasource/auth_remote_datasource.dart';
-import 'register_page.dart';
+import 'package:ghost_kitchens_app/features/auth/presentation/pages/register_page.dart';
+import 'package:ghost_kitchens_app/features/shell/presentation/pages/main_shell_page.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -14,21 +15,23 @@ class LoginPage extends StatefulWidget {
 
 class _LoginPageState extends State<LoginPage> {
   final _formKey = GlobalKey<FormState>();
+
+  // Controladores
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-
-  // Instancia del datasource
-  late AuthRemoteDataSourceImpl _authDataSource;
 
   bool _isLoading = false;
   bool _obscurePassword = true;
 
+  // CORREGIDO: Usamos la clase concreta AuthRemoteDataSource
+  late AuthRemoteDataSource _authDataSource;
+
   @override
   void initState() {
     super.initState();
-    // Inicializamos las dependencias manualmente
     final apiClient = ApiClient();
-    _authDataSource = AuthRemoteDataSourceImpl(apiClient);
+    // CORREGIDO: Instanciamos AuthRemoteDataSource (sin el Impl)
+    _authDataSource = AuthRemoteDataSource(apiClient);
   }
 
   @override
@@ -41,48 +44,46 @@ class _LoginPageState extends State<LoginPage> {
   Future<void> _onLoginPressed() async {
     if (!_formKey.currentState!.validate()) return;
 
-    // Ocultar teclado
+    setState(() => _isLoading = true);
     FocusScope.of(context).unfocus();
 
-    setState(() => _isLoading = true);
-
     try {
-      // 1. Llamada al Backend
-      final responseDto = await _authDataSource.login(
-        email: _emailController.text.trim(),
-        password: _passwordController.text.trim(),
-      );
+      final email = _emailController.text.trim();
+      final password = _passwordController.text.trim();
 
-      // 2. Guardar Token en el dispositivo
+      // 1. Llamar al backend para login
+      final response = await _authDataSource.login(email, password);
+
+      // 2. Guardar el token
+      final token = response['access_token'];
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('token', responseDto.accessToken);
+      await prefs.setString('token', token);
 
       if (!mounted) return;
 
-      // 3. Navegar al Home
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('¡Bienvenido! Sesión iniciada 🚀')),
-      );
-
-      Navigator.of(context).pushReplacement(
+      // 3. Ir al Home (MainShellPage)
+      Navigator.pushReplacement(
+        context,
         MaterialPageRoute(builder: (_) => const MainShellPage()),
       );
 
     } catch (e) {
-      // Manejo de errores
       if (!mounted) return;
 
-      String mensajeError = 'Error al iniciar sesión';
-      // Si el error viene de Dio, intentamos mostrar algo más claro
-      if (e.toString().contains('401')) {
-        mensajeError = 'Correo o contraseña incorrectos';
-      } else if (e.toString().contains('Connection refused')) {
-        mensajeError = 'No se pudo conectar al servidor. Revisa Docker.';
+      String errorMessage = 'Error al iniciar sesión';
+
+      if (e is DioException) {
+        if (e.response != null && e.response?.data != null) {
+          final detail = e.response?.data['detail'];
+          errorMessage = detail?.toString() ?? 'Credenciales inválidas';
+        } else {
+          errorMessage = 'Error de conexión con el servidor';
+        }
       }
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(mensajeError),
+          content: Text(errorMessage),
           backgroundColor: Colors.red,
         ),
       );
@@ -93,124 +94,81 @@ class _LoginPageState extends State<LoginPage> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
     return Scaffold(
+      appBar: AppBar(title: const Text("Iniciar Sesión")),
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: SingleChildScrollView(
+          padding: const EdgeInsets.all(24.0),
+          child: Form(
+            key: _formKey,
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const SizedBox(height: 32),
-                Text(
-                  'Bienvenido a\nGhost Kitchens',
-                  style: theme.textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
+                // Logo o Título grande
+                const Icon(Icons.restaurant_menu, size: 80, color: Colors.orange),
+                const SizedBox(height: 20),
+                const Text(
+                  "Ghost Kitchens",
+                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
                 ),
-                const SizedBox(height: 8),
-                Text(
-                  'Inicia sesión para pedir de tus cocinas favoritas.',
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: Colors.grey,
-                  ),
-                ),
-                const SizedBox(height: 32),
+                const SizedBox(height: 40),
 
-                Form(
-                  key: _formKey,
-                  child: Column(
-                    children: [
-                      TextFormField(
-                        controller: _emailController,
-                        keyboardType: TextInputType.emailAddress,
-                        decoration: const InputDecoration(
-                          labelText: 'Correo electrónico',
-                          prefixIcon: Icon(Icons.email_outlined),
-                        ),
-                        validator: (value) {
-                          if (value == null || value.trim().isEmpty) {
-                            return 'Ingresa tu correo';
-                          }
-                          if (!value.contains('@')) {
-                            return 'Correo no válido';
-                          }
-                          return null;
-                        },
-                      ),
-                      const SizedBox(height: 16),
-                      TextFormField(
-                        controller: _passwordController,
-                        obscureText: _obscurePassword,
-                        decoration: InputDecoration(
-                          labelText: 'Contraseña',
-                          prefixIcon: const Icon(Icons.lock_outline),
-                          suffixIcon: IconButton(
-                            icon: Icon(
-                              _obscurePassword
-                                  ? Icons.visibility_off
-                                  : Icons.visibility,
-                            ),
-                            onPressed: () {
-                              setState(() {
-                                _obscurePassword = !_obscurePassword;
-                              });
-                            },
-                          ),
-                        ),
-                        validator: (value) {
-                          if (value == null || value.isEmpty) {
-                            return 'Ingresa tu contraseña';
-                          }
-                          return null;
-                        },
-                      ),
-                    ],
+                // Email
+                TextFormField(
+                  controller: _emailController,
+                  keyboardType: TextInputType.emailAddress,
+                  decoration: const InputDecoration(
+                    labelText: 'Correo electrónico',
+                    prefixIcon: Icon(Icons.email_outlined),
                   ),
+                  validator: (v) => !v!.contains('@') ? 'Correo inválido' : null,
+                ),
+                const SizedBox(height: 16),
+
+                // Contraseña
+                TextFormField(
+                  controller: _passwordController,
+                  obscureText: _obscurePassword,
+                  decoration: InputDecoration(
+                    labelText: 'Contraseña',
+                    prefixIcon: const Icon(Icons.lock_outline),
+                    suffixIcon: IconButton(
+                      icon: Icon(_obscurePassword ? Icons.visibility_off : Icons.visibility),
+                      onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                    ),
+                  ),
+                  validator: (v) => v!.isEmpty ? 'Ingresa tu contraseña' : null,
                 ),
 
-                const SizedBox(height: 8),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: TextButton(
-                    onPressed: () {},
-                    child: const Text('¿Olvidaste tu contraseña?'),
+                const SizedBox(height: 32),
+
+                // Botón Login
+                SizedBox(
+                  width: double.infinity,
+                  height: 50,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.orange,
+                      foregroundColor: Colors.white,
+                    ),
+                    onPressed: _isLoading ? null : _onLoginPressed,
+                    child: _isLoading
+                        ? const CircularProgressIndicator(color: Colors.white)
+                        : const Text('Ingresar', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                   ),
                 ),
 
                 const SizedBox(height: 16),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: _isLoading ? null : _onLoginPressed,
-                    child: _isLoading
-                        ? const SizedBox(
-                            height: 20,
-                            width: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Text('Iniciar sesión'),
-                  ),
-                ),
 
-                const SizedBox(height: 24),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Text('¿No tienes cuenta?'),
-                    TextButton(
-                      onPressed: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => const RegisterPage(),
-                          ),
-                        );
-                      },
-                      child: const Text('Crear cuenta'),
-                    ),
-                  ],
+                // Ir a Registro
+                TextButton(
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const RegisterPage())
+                    );
+                  },
+                  child: const Text("¿No tienes cuenta? Regístrate aquí", style: TextStyle(color: Colors.orange)),
                 ),
               ],
             ),

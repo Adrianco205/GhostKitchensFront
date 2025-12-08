@@ -102,25 +102,27 @@ class _AddressListPageState extends State<AddressListPage> {
                 trailing: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    // EDITAR
+                    // BOTÓN EDITAR
                     IconButton(
                       icon: const Icon(Icons.edit, color: Colors.orangeAccent),
                       onPressed: () async {
+                        // Navegamos al formulario PASANDO la dirección actual
                         final result = await Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (_) => AddressFormPage(addressToEdit: addr),
+                            builder: (_) => AddressFormPage(addressToEdit: addr), // Pasamos datos
                           ),
                         );
                         if (result == true) {
-                          _loadData();
+                          _loadData(); // Recargamos la lista si se editó
                         }
                       },
                     ),
-                    // BORRAR
+                    // BOTÓN BORRAR
                     IconButton(
                       icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
                       onPressed: () async {
+                        // Diálogo de confirmación
                         final confirm = await showDialog<bool>(
                           context: context,
                           builder: (ctx) => AlertDialog(
@@ -136,7 +138,7 @@ class _AddressListPageState extends State<AddressListPage> {
 
                         if (confirm == true && addr.id != null) {
                           await _dataSource.deleteAddress(addr.id!);
-                          _loadData();
+                          _loadData(); // Recargar lista
                         }
                       },
                     ),

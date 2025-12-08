@@ -1,38 +1,37 @@
-class UsuarioDto {
+// --- DTO PARA LEER EL USUARIO (PERFIL) ---
+class UserDto {
   final int id;
-  final String email;
   final String nombre;
-  final String apellido;
+  final String email;
+  final String rol;
 
-  UsuarioDto({
+  UserDto({
     required this.id,
-    required this.email,
     required this.nombre,
-    required this.apellido,
+    required this.email,
+    required this.rol,
   });
 
-  factory UsuarioDto.fromJson(Map<String, dynamic> json) {
-    return UsuarioDto(
+  factory UserDto.fromJson(Map<String, dynamic> json) {
+    return UserDto(
       id: json['id'] ?? 0,
+      // Si el backend manda nombre y apellido separados, puedes unirlos aquí si quieres
+      nombre: json['nombre'] ?? 'Usuario',
       email: json['email'] ?? '',
-      nombre: json['nombre'] ?? '',
-      apellido: json['apellido'] ?? '',
+      rol: json['rol'] ?? 'CLIENTE',
     );
   }
-
-  // Si necesitas convertir a entidad de dominio
-  // Usuario toEntity() => Usuario(...);
 }
 
-// --- DTO PARA EL REGISTRO ---
-class UsuarioRegisterDto {
+// --- DTO PARA EL REGISTRO (ENVIAR) ---
+class UserRegisterDto {
   final String nombre;
   final String apellido;
   final String email;
   final String celular;
   final String password;
 
-  UsuarioRegisterDto({
+  UserRegisterDto({
     required this.nombre,
     required this.apellido,
     required this.email,

@@ -1,25 +1,41 @@
 // lib/features/shell/presentation/profile_page.dart
 
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
-// Historial de pedidos
+// API & Datos
+import 'package:ghost_kitchens_app/core/network/api_client.dart';
+import 'package:ghost_kitchens_app/features/auth/data/datasource/auth_remote_datasource.dart';
+import 'package:ghost_kitchens_app/features/auth/data/models/user_dto.dart';
+
+// Navegación a otras pantallas
 import 'package:ghost_kitchens_app/features/orders/presentation/pages/orders_history_page.dart';
-
-// PQR / Reclamos
 import 'package:ghost_kitchens_app/features/support/presentation/pages/pqr_list_page.dart';
-
-// Direcciones
 import 'package:ghost_kitchens_app/features/addresses/presentation/pages/address_list_page.dart';
-
-// Textos legales (términos y política)
 import 'package:ghost_kitchens_app/features/support/presentation/pages/legal.dart';
-
-// Login (para simular cierre de sesión)
 import 'package:ghost_kitchens_app/features/auth/presentation/pages/login_page.dart';
 
-class ProfilePage extends StatelessWidget {
+class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
 
+  @override
+  State<ProfilePage> createState() => _ProfilePageState();
+}
+
+class _ProfilePageState extends State<ProfilePage> {
+  // Variables para la carga de datos del usuario
+  late AuthRemoteDataSource _authDataSource;
+  late Future<UserDto> _profileFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    // Inicializamos el DataSource y la petición al perfil
+    _authDataSource = AuthRemoteDataSource(ApiClient());
+    _profileFuture = _authDataSource.getUserProfile();
+  }
+
+  // Lógica para mostrar la hoja de términos legales (Tu código original)
   void _showLegalSheet(BuildContext context) {
     final theme = Theme.of(context);
 
@@ -38,12 +54,10 @@ class ProfilePage extends StatelessWidget {
             maxChildSize: 0.95,
             builder: (context, scrollController) {
               return Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Handle
                     Center(
                       child: Container(
                         width: 40,
@@ -81,8 +95,7 @@ class ProfilePage extends StatelessWidget {
                             ),
                             const SizedBox(height: 8),
                             ExpansionTile(
-                              title: const Text(
-                                  'Política de Tratamiento de Datos Personales'),
+                              title: const Text('Política de Tratamiento de Datos'),
                               children: [
                                 Padding(
                                   padding: const EdgeInsets.all(8.0),
@@ -115,14 +128,14 @@ class ProfilePage extends StatelessWidget {
     );
   }
 
+  // Lógica de cierre de sesión
   Future<void> _confirmLogout(BuildContext context) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) {
         return AlertDialog(
           title: const Text('Cerrar sesión'),
-          content: const Text(
-              '¿Seguro que deseas cerrar sesión en este dispositivo?'),
+          content: const Text('¿Seguro que deseas cerrar sesión en este dispositivo?'),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(ctx).pop(false),
@@ -138,7 +151,11 @@ class ProfilePage extends StatelessWidget {
     );
 
     if (confirmed == true && context.mounted) {
-      // Aquí más adelante limpiarás tokens / sesión real.
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.clear(); // Borramos token y datos locales
+
+      if (!mounted) return;
+
       Navigator.of(context).pushAndRemoveUntil(
         MaterialPageRoute(builder: (_) => const LoginPage()),
         (route) => false,
@@ -153,40 +170,64 @@ class ProfilePage extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Mi cuenta'),
+        automaticallyImplyLeading: false, // Evita la flecha de volver si es una pestaña principal
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          // Cabecera con avatar y nombre (mock por ahora)
-          Row(
-            children: [
-              CircleAvatar(
-                radius: 28,
-                child: Icon(
-                  Icons.person,
-                  size: 32,
-                  color: theme.colorScheme.onPrimary,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+          // ================== CABECERA DE USUARIO (DINÁMICA) ==================
+          FutureBuilder<UserDto>(
+            future: _profileFuture,
+            builder: (context, snapshot) {
+              // Valores por defecto mientras carga
+              String nombreMostrar = "Cargando...";
+              String emailMostrar = "";
+              bool isLoading = snapshot.connectionState == ConnectionState.waiting;
+
+              if (snapshot.hasData) {
+                nombreMostrar = "Hola, ${snapshot.data!.nombre}";
+                emailMostrar = snapshot.data!.email;
+              } else if (snapshot.hasError) {
+                nombreMostrar = "Hola, Invitado";
+                emailMostrar = "Error al cargar perfil";
+              }
+
+              return Row(
                 children: [
-                  Text(
-                    'Hola, Cliente',
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w600,
-                    ),
+                  CircleAvatar(
+                    radius: 28,
+                    backgroundColor: theme.colorScheme.primary, // Color naranja
+                    child: isLoading
+                      ? const Padding(
+                          padding: EdgeInsets.all(12.0),
+                          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                        )
+                      : const Icon(
+                          Icons.person,
+                          size: 32,
+                          color: Colors.white,
+                        ),
                   ),
-                  const SizedBox(height: 2),
-                  Text(
-                    'Aquí verás la información de tu perfil.',
-                    style: theme.textTheme.bodySmall
-                        ?.copyWith(color: Colors.grey),
+                  const SizedBox(width: 12),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        nombreMostrar,
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        emailMostrar.isNotEmpty ? emailMostrar : 'Información de tu perfil',
+                        style: theme.textTheme.bodySmall?.copyWith(color: Colors.grey),
+                      ),
+                    ],
                   ),
                 ],
-              ),
-            ],
+              );
+            },
           ),
 
           const SizedBox(height: 24),
@@ -194,21 +235,17 @@ class ProfilePage extends StatelessWidget {
           // ================== SECCIÓN PEDIDOS ==================
           Text(
             'Pedidos',
-            style: theme.textTheme.titleMedium
-                ?.copyWith(fontWeight: FontWeight.w600),
+            style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 8),
 
           _AccountOptionCard(
             icon: Icons.receipt_long_outlined,
             title: 'Ver historial de pedidos',
-            subtitle:
-                'Consulta pedidos entregados o cancelados y su estado.',
+            subtitle: 'Consulta pedidos entregados o cancelados y su estado.',
             onTap: () {
               Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => const OrdersHistoryPage(),
-                ),
+                MaterialPageRoute(builder: (_) => const OrdersHistoryPage()),
               );
             },
           ),
@@ -218,21 +255,17 @@ class ProfilePage extends StatelessWidget {
           // ================== SECCIÓN SOPORTE / PQR ==================
           Text(
             'Soporte y reclamos',
-            style: theme.textTheme.titleMedium
-                ?.copyWith(fontWeight: FontWeight.w600),
+            style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 8),
 
           _AccountOptionCard(
             icon: Icons.support_agent_outlined,
             title: 'Mis PQR / Reclamos',
-            subtitle:
-                'Revisa el estado de tus Peticiones, Quejas o Reclamos.',
+            subtitle: 'Revisa el estado de tus Peticiones, Quejas o Reclamos.',
             onTap: () {
               Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => const PqrListPage(),
-                ),
+                MaterialPageRoute(builder: (_) => const PqrListPage()),
               );
             },
           ),
@@ -242,8 +275,7 @@ class ProfilePage extends StatelessWidget {
           // ================== SECCIÓN CONFIGURACIÓN ==================
           Text(
             'Configuración',
-            style: theme.textTheme.titleMedium
-                ?.copyWith(fontWeight: FontWeight.w600),
+            style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 8),
 
@@ -254,9 +286,7 @@ class ProfilePage extends StatelessWidget {
             subtitle: 'Administra tus direcciones guardadas.',
             onTap: () {
               Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => const AddressListPage(),
-                ),
+                MaterialPageRoute(builder: (_) => const AddressListPage()),
               );
             },
           ),
@@ -267,8 +297,7 @@ class ProfilePage extends StatelessWidget {
           _AccountOptionCard(
             icon: Icons.description_outlined,
             title: 'Términos y privacidad',
-            subtitle:
-                'Consulta los Términos de uso y la Política de datos.',
+            subtitle: 'Consulta los Términos de uso y la Política de datos.',
             onTap: () => _showLegalSheet(context),
           ),
 
@@ -289,6 +318,7 @@ class ProfilePage extends StatelessWidget {
   }
 }
 
+// Widget auxiliar para las tarjetas de opciones
 class _AccountOptionCard extends StatelessWidget {
   final IconData icon;
   final String title;
@@ -307,6 +337,8 @@ class _AccountOptionCard extends StatelessWidget {
     final theme = Theme.of(context);
 
     return Card(
+      // Usamos un color oscuro específico si quieres mantener consistencia visual
+      color: const Color(0xFF1E2029),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
       ),
@@ -317,7 +349,7 @@ class _AccountOptionCard extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           child: Row(
             children: [
-              Icon(icon, size: 26),
+              Icon(icon, size: 26, color: Colors.white70),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
@@ -327,18 +359,18 @@ class _AccountOptionCard extends StatelessWidget {
                       title,
                       style: theme.textTheme.bodyMedium?.copyWith(
                         fontWeight: FontWeight.w600,
+                        color: Colors.white,
                       ),
                     ),
                     const SizedBox(height: 2),
                     Text(
                       subtitle,
-                      style: theme.textTheme.bodySmall
-                          ?.copyWith(color: Colors.grey),
+                      style: theme.textTheme.bodySmall?.copyWith(color: Colors.grey),
                     ),
                   ],
                 ),
               ),
-              const Icon(Icons.chevron_right),
+              const Icon(Icons.chevron_right, color: Colors.grey),
             ],
           ),
         ),

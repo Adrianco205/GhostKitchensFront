@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:dio/dio.dart'; // Importar Dio para capturar DioException
 import 'package:ghost_kitchens_app/core/network/api_client.dart';
 import 'package:ghost_kitchens_app/features/auth/data/datasource/auth_remote_datasource.dart';
-import 'package:ghost_kitchens_app/features/auth/data/models/usuario_dto.dart';
+import 'package:ghost_kitchens_app/features/auth/data/models/user_dto.dart';
 
 class RegisterPage extends StatefulWidget {
   const RegisterPage({super.key});
@@ -24,14 +24,15 @@ class _RegisterPageState extends State<RegisterPage> {
   bool _isLoading = false;
   bool _obscurePassword = true;
 
-  // Instancia del DataSource
-  late AuthRemoteDataSourceImpl _authDataSource;
+  // Instancia del DataSource (Corregido el nombre)
+  late AuthRemoteDataSource _authDataSource;
 
   @override
   void initState() {
     super.initState();
     final apiClient = ApiClient();
-    _authDataSource = AuthRemoteDataSourceImpl(apiClient);
+    // Corregido: Usamos la clase concreta, no Impl
+    _authDataSource = AuthRemoteDataSource(apiClient);
   }
 
   @override
@@ -52,7 +53,8 @@ class _RegisterPageState extends State<RegisterPage> {
 
     try {
       // 1. Crear el DTO con los datos del formulario
-      final registroDto = UsuarioRegisterDto(
+      // CORREGIDO: Usamos UserRegisterDto en lugar de UsuarioRegisterDto
+      final registroDto = UserRegisterDto(
         nombre: _nombreController.text.trim(),
         apellido: _apellidoController.text.trim(),
         email: _emailController.text.trim(),
@@ -80,11 +82,8 @@ class _RegisterPageState extends State<RegisterPage> {
 
       String errorMessage = 'Error al registrar usuario';
 
-      // --- AQUÍ ESTABA TU ERROR DE NULL SAFETY ---
-      // Lo corregimos usando 'Try cast' y '??'
       if (e is DioException) {
         if (e.response != null && e.response?.data != null) {
-          // Intentamos sacar el mensaje exacto del backend (ej: "Email ya existe")
           final detail = e.response?.data['detail'];
           errorMessage = detail?.toString() ?? 'Error desconocido en el servidor';
         } else {
@@ -173,7 +172,7 @@ class _RegisterPageState extends State<RegisterPage> {
                   child: ElevatedButton(
                     onPressed: _isLoading ? null : _onRegisterPressed,
                     child: _isLoading
-                        ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator())
+                        ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
                         : const Text('Crear cuenta'),
                   ),
                 ),

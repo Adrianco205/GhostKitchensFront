@@ -5,7 +5,7 @@ import 'package:ghost_kitchens_app/features/addresses/data/datasource/address_re
 import 'package:ghost_kitchens_app/features/addresses/data/models/address_dto.dart';
 
 class AddressFormPage extends StatefulWidget {
-  final AddressDto? addressToEdit; // Si viene null, es crear. Si trae datos, es editar.
+  final AddressDto? addressToEdit; // Si viene null es crear, si no es editar
 
   const AddressFormPage({super.key, this.addressToEdit});
 
@@ -16,7 +16,7 @@ class AddressFormPage extends StatefulWidget {
 class _AddressFormPageState extends State<AddressFormPage> {
   final _formKey = GlobalKey<FormState>();
 
-  // Controladores
+  // Controladores para todos los campos detallados
   late TextEditingController _direccionController;
   late TextEditingController _deptoController;
   late TextEditingController _municipioController;
@@ -32,7 +32,7 @@ class _AddressFormPageState extends State<AddressFormPage> {
     super.initState();
     _dataSource = AddressRemoteDataSource(ApiClient());
 
-    // Inicializar controladores con datos si estamos editando
+    // Si estamos editando, llenamos los campos. Si no, valores por defecto.
     final addr = widget.addressToEdit;
     _direccionController = TextEditingController(text: addr?.direccionExacta ?? '');
     _deptoController = TextEditingController(text: addr?.departamento ?? 'Bolívar');
@@ -59,36 +59,52 @@ class _AddressFormPageState extends State<AddressFormPage> {
     setState(() => _isLoading = true);
 
     try {
+      // Creamos el objeto con la estructura detallada
       final dto = AddressDto(
-        direccionExacta: _direccionController.text,
-        departamento: _deptoController.text,
-        municipio: _municipioController.text,
-        barrio: _barrioController.text,
-        apartamentoCasa: _aptoController.text.isEmpty ? null : _aptoController.text,
-        indicaciones: _indicacionesController.text.isEmpty ? null : _indicacionesController.text,
+        direccionExacta: _direccionController.text.trim(),
+        departamento: _deptoController.text.trim(),
+        municipio: _municipioController.text.trim(),
+        barrio: _barrioController.text.trim(),
+        apartamentoCasa: _aptoController.text.isEmpty ? null : _aptoController.text.trim(),
+        indicaciones: _indicacionesController.text.isEmpty ? null : _indicacionesController.text.trim(),
       );
 
       if (widget.addressToEdit == null) {
         // CREAR
         await _dataSource.createAddress(dto);
       } else {
-        // EDITAR (Usamos el ID que vino en el objeto original)
+        // EDITAR
         await _dataSource.updateAddress(widget.addressToEdit!.id!, dto);
       }
 
       if (!mounted) return;
-      Navigator.pop(context, true); // Volver y recargar
 
-      final action = widget.addressToEdit == null ? "creada" : "actualizada";
+      // Volver a la lista indicando éxito
+      Navigator.pop(context, true);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Dirección $action con éxito"), backgroundColor: Colors.green),
+        const SnackBar(content: Text("Dirección guardada correctamente"), backgroundColor: Colors.green),
       );
 
     } catch (e) {
       String msg = "Error al guardar";
+
+      // --- CORRECCIÓN DE SEGURIDAD PARA ERRORES ---
       if (e is DioException) {
-        msg = e.response?.data['detail']?.toString() ?? e.message ?? "Error desconocido";
+        if (e.response != null && e.response?.data != null) {
+          final data = e.response!.data;
+          // Verificamos si la respuesta es un JSON (Map) y tiene 'detail'
+          if (data is Map && data.containsKey('detail')) {
+            msg = data['detail'].toString();
+          } else {
+            // Si es un string directo (ej: error 500 texto plano), lo mostramos tal cual
+            msg = data.toString();
+          }
+        } else {
+          msg = e.message ?? "Error de conexión";
+        }
       }
+
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(msg), backgroundColor: Colors.red),
       );
@@ -99,35 +115,76 @@ class _AddressFormPageState extends State<AddressFormPage> {
 
   @override
   Widget build(BuildContext context) {
-    final isEditing = widget.addressToEdit != null;
-
     return Scaffold(
-      appBar: AppBar(title: Text(isEditing ? "Editar Dirección" : "Nueva Dirección")),
+      appBar: AppBar(
+        title: Text(widget.addressToEdit == null ? "Nueva Dirección" : "Editar Dirección")
+      ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
         child: Form(
           key: _formKey,
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // ... (Mismos campos de texto que tenías antes: Depto, Muni, Barrio, Dirección, Apto, Indicaciones) ...
-              // COPIA LOS TEXTFORMFIELDS DE TU VERSIÓN ANTERIOR AQUÍ PARA NO REPETIRLOS,
-              // SOLO ASEGURATE DE USAR LOS CONTROLADORES QUE INICIALICÉ ARRIBA.
+              const Text("Detalles de ubicación", style: TextStyle(color: Colors.grey, fontSize: 16)),
+              const SizedBox(height: 24),
 
-              // Ejemplo rápido de uno:
-              TextFormField(
-                controller: _direccionController,
-                decoration: const InputDecoration(labelText: "Dirección", prefixIcon: Icon(Icons.pin_drop)),
-                validator: (v) => v!.isEmpty ? "Requerido" : null,
+              // 1. Departamento y Municipio
+              Row(
+                children: [
+                  Expanded(
+                    child: TextFormField(
+                      controller: _deptoController,
+                      decoration: const InputDecoration(labelText: "Departamento", prefixIcon: Icon(Icons.map)),
+                      validator: (v) => v!.isEmpty ? "Requerido" : null,
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: TextFormField(
+                      controller: _municipioController,
+                      decoration: const InputDecoration(labelText: "Municipio", prefixIcon: Icon(Icons.location_city)),
+                      validator: (v) => v!.isEmpty ? "Requerido" : null,
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: 16),
+
+              // 2. Barrio
               TextFormField(
                 controller: _barrioController,
                 decoration: const InputDecoration(labelText: "Barrio", prefixIcon: Icon(Icons.holiday_village)),
                 validator: (v) => v!.isEmpty ? "Requerido" : null,
               ),
-              // ... Pon el resto de tus campos aquí ...
+              const SizedBox(height: 16),
+
+              // 3. Dirección Exacta
+              TextFormField(
+                controller: _direccionController,
+                decoration: const InputDecoration(labelText: "Dirección (Calle, Cra #)", prefixIcon: Icon(Icons.pin_drop)),
+                validator: (v) => v!.isEmpty ? "Requerido" : null,
+              ),
+              const SizedBox(height: 16),
+
+              // 4. Apto / Casa
+              TextFormField(
+                controller: _aptoController,
+                decoration: const InputDecoration(labelText: "Apto / Casa / Bloque (Opcional)", prefixIcon: Icon(Icons.home)),
+              ),
+              const SizedBox(height: 16),
+
+              // 5. Indicaciones
+              TextFormField(
+                controller: _indicacionesController,
+                maxLines: 2,
+                maxLength: 128,
+                decoration: const InputDecoration(labelText: "Indicaciones extra (Opcional)", prefixIcon: Icon(Icons.info_outline)),
+              ),
 
               const SizedBox(height: 32),
+
+              // Botón Guardar
               SizedBox(
                 width: double.infinity,
                 height: 50,
@@ -136,7 +193,8 @@ class _AddressFormPageState extends State<AddressFormPage> {
                   onPressed: _isLoading ? null : _saveAddress,
                   child: _isLoading
                     ? const CircularProgressIndicator(color: Colors.white)
-                    : Text(isEditing ? "Actualizar" : "Guardar", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                    : Text(widget.addressToEdit == null ? "Guardar Dirección" : "Actualizar",
+                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                 ),
               )
             ],
